@@ -1,8 +1,0 @@
-key_trigger {
-  input: KEY_SPACE
-  action: "key_space"
-}
-key_trigger {
-  input: KEY_R
-  action: "key_r"
-}
