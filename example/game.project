@@ -1,0 +1,18 @@
+[project]
+title = Yes2SDK Example
+version = 1.0.0
+dependencies#0 = https://github.com/yes2games/yes2sdk-defold/archive/refs/heads/main.zip
+
+[display]
+width = 960
+height = 540
+
+[html5]
+custom_heap_size = 268435456
+htmlfile = /main/index.html
+
+[script]
+shared_state = 1
+
+[bootstrap]
+main_collection = /main/main.collectionc
