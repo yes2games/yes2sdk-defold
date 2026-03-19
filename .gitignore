@@ -1,0 +1,6 @@
+example/build/
+example/.internal/
+example/.editor_settings
+example/manifest.*.der
+*.zip
+.DS_Store

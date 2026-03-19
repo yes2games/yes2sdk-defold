@@ -9,7 +9,6 @@ height = 540
 
 [html5]
 custom_heap_size = 268435456
-htmlfile = /main/index.html
 
 [script]
 shared_state = 1
