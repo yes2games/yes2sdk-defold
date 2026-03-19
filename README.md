@@ -216,9 +216,55 @@ Your game **must** implement these to pass platform review:
 6. **Download** the platform-specific zip
 7. **Upload** to the platform (inspector.poki.dev, CG developer portal, etc.)
 
-## Example
+## Troubleshooting
 
-See the `example/` folder for a minimal integration that demonstrates all core features.
+### "Couldn't install the following dependencies" when fetching library
+
+Defold's library fetch can fail intermittently with GitHub archive URLs. If `Project > Fetch Libraries` fails:
+
+**Option A: Manual install (recommended)**
+
+1. Download the latest release: [yes2sdk-defold-main.zip](https://github.com/yes2games/yes2sdk-defold/archive/refs/heads/main.zip)
+2. Extract the zip
+3. Copy the `yes2sdk/` folder into your game project root
+4. Your project should look like:
+   ```
+   your-game/
+   ├── game.project
+   ├── yes2sdk/          ← copy this folder here
+   │   ├── ext.manifest
+   │   ├── include/
+   │   ├── src/
+   │   └── lib/web/
+   └── main/
+   ```
+5. Remove the dependency line from `game.project` (optional — won't conflict)
+6. Close and reopen Defold Editor
+
+**Option B: Clear cache and retry**
+
+1. Close Defold Editor
+2. Delete `.internal/lib/` folder in your project directory
+3. Reopen Defold Editor
+4. `Project > Fetch Libraries` again
+
+### Extension not found (`yes2sdk` is nil)
+
+The `yes2sdk` Lua module is nil at runtime. This means the native extension wasn't compiled into the HTML5 build.
+
+**Cause:** You used `Project > Build` instead of `Project > Bundle`.
+
+**Fix:** Always use **Project > Bundle > HTML5 Application > Create Bundle** for HTML5 builds. The regular Build command doesn't compile native extensions through the build cloud.
+
+### `excluded_content.zip` 404 error in console
+
+This is Defold's LiveUpdate feature looking for excluded content. It's harmless and doesn't affect your game or SDK integration. You can safely ignore it.
+
+### Game plays but no SDK events in inspector
+
+1. Verify the extension is compiled: open browser console and check for `[Yes2SDK]` log messages
+2. If no logs appear, the extension wasn't included — see "Extension not found" above
+3. Make sure your code calls `yes2sdk.initialize()` early (in `init()` of your main script)
 
 ## Supported Platforms
 
