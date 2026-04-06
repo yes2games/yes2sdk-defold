@@ -10,10 +10,12 @@ In your `game.project`, add:
 
 ```ini
 [project]
-dependencies#0 = https://github.com/yes2games/yes2sdk-defold/archive/refs/heads/main.zip
+dependencies#0 = https://github.com/yes2games/yes2sdk-defold/archive/refs/tags/v1.0.0.zip
 ```
 
 Then in Defold Editor: **Project > Fetch Libraries**
+
+> **Note:** Always use a tagged release URL (not `/refs/heads/main.zip`). Tagged archives are cached more reliably by GitHub and Defold's library fetcher.
 
 ### 2. Minimum Integration (Required)
 
@@ -220,11 +222,32 @@ Your game **must** implement these to pass platform review:
 
 ### "Couldn't install the following dependencies" when fetching library
 
-Defold's library fetch can fail intermittently with GitHub archive URLs. If `Project > Fetch Libraries` fails:
+This usually happens when using a branch archive URL (`/refs/heads/main.zip`). GitHub serves these less reliably than tagged releases.
 
-**Option A: Manual install (recommended)**
+**Fix: Use a tagged release URL** (recommended)
 
-1. Download the latest release: [yes2sdk-defold-main.zip](https://github.com/yes2games/yes2sdk-defold/archive/refs/heads/main.zip)
+Make sure your `game.project` uses a tagged release, not a branch:
+
+```ini
+# Good — tagged release (reliable)
+dependencies#0 = https://github.com/yes2games/yes2sdk-defold/archive/refs/tags/v1.0.0.zip
+
+# Bad — branch archive (intermittent failures)
+dependencies#0 = https://github.com/yes2games/yes2sdk-defold/archive/refs/heads/main.zip
+```
+
+Then clear the cache and retry:
+
+1. Close Defold Editor
+2. Delete `.internal/lib/` folder in your project directory
+3. Reopen Defold Editor
+4. `Project > Fetch Libraries`
+
+**Fallback: Manual install**
+
+If fetch still fails (e.g. network/firewall issues):
+
+1. Download from [GitHub Releases](https://github.com/yes2games/yes2sdk-defold/releases/latest)
 2. Extract the zip
 3. Copy the `yes2sdk/` folder into your game project root
 4. Your project should look like:
@@ -240,13 +263,6 @@ Defold's library fetch can fail intermittently with GitHub archive URLs. If `Pro
    ```
 5. Remove the dependency line from `game.project` (optional — won't conflict)
 6. Close and reopen Defold Editor
-
-**Option B: Clear cache and retry**
-
-1. Close Defold Editor
-2. Delete `.internal/lib/` folder in your project directory
-3. Reopen Defold Editor
-4. `Project > Fetch Libraries` again
 
 ### Extension not found (`yes2sdk` is nil)
 
