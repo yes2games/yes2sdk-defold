@@ -10,7 +10,7 @@ In your `game.project`, add:
 
 ```ini
 [project]
-dependencies#0 = https://github.com/yes2games/yes2sdk-defold/archive/refs/tags/v1.0.0.zip
+dependencies#0 = https://github.com/yes2games/yes2sdk-defold/archive/refs/tags/v1.0.1.zip
 ```
 
 Then in Defold Editor: **Project > Fetch Libraries**
@@ -230,7 +230,7 @@ Make sure your `game.project` uses a tagged release, not a branch:
 
 ```ini
 # Good — tagged release (reliable)
-dependencies#0 = https://github.com/yes2games/yes2sdk-defold/archive/refs/tags/v1.0.0.zip
+dependencies#0 = https://github.com/yes2games/yes2sdk-defold/archive/refs/tags/v1.0.1.zip
 
 # Bad — branch archive (intermittent failures)
 dependencies#0 = https://github.com/yes2games/yes2sdk-defold/archive/refs/heads/main.zip
