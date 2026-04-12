@@ -10,7 +10,7 @@ In your `game.project`, add:
 
 ```ini
 [project]
-dependencies#0 = https://github.com/yes2games/yes2sdk-defold/archive/refs/tags/v1.0.1.zip
+dependencies#0 = https://github.com/yes2games/yes2sdk-defold/archive/refs/tags/v1.1.0.zip
 ```
 
 Then in Defold Editor: **Project > Fetch Libraries**
@@ -208,6 +208,20 @@ Your game **must** implement these to pass platform review:
 | No ads during active gameplay | Required | Required | Required | Required |
 | Rewarded ads grant reward only on `adViewed` | Required | Required | Required | Required |
 
+## Branded Loading Screen (Optional)
+
+Yes2SDK includes a custom HTML5 template with an animated Yes2Games loading screen. To use it, add this to your `game.project`:
+
+```ini
+[html5]
+custom_html_shell = /yes2sdk/html5/engine_template.html
+```
+
+This replaces the default Defold loading bar with:
+- Animated Yes2Games logo with breathing glow effect
+- Slim progress bar with shimmer animation
+- Smooth fade-out when loading completes
+
 ## Build & Deploy
 
 1. **Build:** Project > Bundle > HTML5 Application > Create Bundle
@@ -230,7 +244,7 @@ Make sure your `game.project` uses a tagged release, not a branch:
 
 ```ini
 # Good — tagged release (reliable)
-dependencies#0 = https://github.com/yes2games/yes2sdk-defold/archive/refs/tags/v1.0.1.zip
+dependencies#0 = https://github.com/yes2games/yes2sdk-defold/archive/refs/tags/v1.1.0.zip
 
 # Bad — branch archive (intermittent failures)
 dependencies#0 = https://github.com/yes2games/yes2sdk-defold/archive/refs/heads/main.zip
