@@ -10,7 +10,7 @@ In your `game.project`, add:
 
 ```ini
 [project]
-dependencies#0 = https://github.com/yes2games/yes2sdk-defold/archive/refs/tags/v1.1.0.zip
+dependencies#0 = https://github.com/yes2games/yes2sdk-defold/archive/refs/tags/v1.1.1.zip
 ```
 
 Then in Defold Editor: **Project > Fetch Libraries**
@@ -234,6 +234,28 @@ This replaces the default Defold loading bar with:
 
 ## Troubleshooting
 
+### Fetch Libraries silently fails (no error, but library not found)
+
+Defold requires a `game.project` file at the root of any library dependency. Without it, `Fetch Libraries` silently skips the archive — no error message, the library simply doesn't appear.
+
+**This was a bug in Yes2SDK versions prior to v1.1.1.** The repo was missing the required `game.project` file.
+
+**Fix:** Update your dependency to v1.1.1 or later:
+
+```ini
+[project]
+dependencies#0 = https://github.com/yes2games/yes2sdk-defold/archive/refs/tags/v1.1.1.zip
+```
+
+Then clear the cache and retry:
+
+1. Close Defold Editor
+2. Delete `.internal/lib/` folder in your project directory
+3. Reopen Defold Editor
+4. `Project > Fetch Libraries`
+
+If you were using v1.1.0 or earlier, this is the fix — those releases did not include the `game.project` file.
+
 ### "Couldn't install the following dependencies" when fetching library
 
 This usually happens when using a branch archive URL (`/refs/heads/main.zip`). GitHub serves these less reliably than tagged releases.
@@ -244,7 +266,7 @@ Make sure your `game.project` uses a tagged release, not a branch:
 
 ```ini
 # Good — tagged release (reliable)
-dependencies#0 = https://github.com/yes2games/yes2sdk-defold/archive/refs/tags/v1.1.0.zip
+dependencies#0 = https://github.com/yes2games/yes2sdk-defold/archive/refs/tags/v1.1.1.zip
 
 # Bad — branch archive (intermittent failures)
 dependencies#0 = https://github.com/yes2games/yes2sdk-defold/archive/refs/heads/main.zip
