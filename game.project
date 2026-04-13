@@ -1,0 +1,6 @@
+[project]
+title = Yes2SDK
+version = 1.1.1
+
+[library]
+include_dirs = yes2sdk
