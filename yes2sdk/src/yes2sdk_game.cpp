@@ -5,10 +5,11 @@ lua_Listener onInviteLinkListener;
 
 void Yes2SDKGame::OnInviteLink(const int success, const char* result) {
     lua_State* L = onInviteLinkListener.m_L;
+    if (!L) return;
     int top = lua_gettop(L);
     lua_pushlistener(L, onInviteLinkListener);
     lua_pushboolean(L, success);
-    lua_pushstring(L, result);
+    if (result) { lua_pushstring(L, result); } else { lua_pushnil(L); }
     int ret = lua_pcall(L, 3, 0, 0);
     if (ret != 0) { lua_pop(L, 1); }
     assert(top == lua_gettop(L));

@@ -14,7 +14,7 @@
 #define EXTENSION_NAME Yes2SDK
 #define LIB_NAME "Yes2SDK"
 #define MODULE_NAME "yes2sdk"
-#define VERSION "1.0.0"
+#define VERSION "1.2.0"
 
 #if defined(DM_PLATFORM_HTML5)
 
@@ -24,11 +24,12 @@ lua_Listener onStartGameListener;
 void Yes2SDK::OnInitialize(const int success, const char *error)
 {
     lua_State *L = onInitializeListener.m_L;
+    if (!L) return;
     int top = lua_gettop(L);
 
     lua_pushlistener(L, onInitializeListener);
     lua_pushboolean(L, success);
-    lua_pushstring(L, error);
+    if (error) { lua_pushstring(L, error); } else { lua_pushnil(L); }
 
     int ret = lua_pcall(L, 3, 0, 0);
     if (ret != 0)
@@ -42,11 +43,12 @@ void Yes2SDK::OnInitialize(const int success, const char *error)
 void Yes2SDK::OnStartGame(const int success, const char *error)
 {
     lua_State *L = onStartGameListener.m_L;
+    if (!L) return;
     int top = lua_gettop(L);
 
     lua_pushlistener(L, onStartGameListener);
     lua_pushboolean(L, success);
-    lua_pushstring(L, error);
+    if (error) { lua_pushstring(L, error); } else { lua_pushnil(L); }
 
     int ret = lua_pcall(L, 3, 0, 0);
     if (ret != 0)

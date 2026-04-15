@@ -32,7 +32,12 @@ var Yes2SDKPlayerLib = {
 
     Yes2SDK_player_getData: function (keysJsonPtr, callback) {
         Yes2SDKPlayerCallbacks._getDataPtr = callback;
-        var keys = JSON.parse(UTF8ToString(keysJsonPtr) || "[]");
+        var keys;
+        try { keys = JSON.parse(UTF8ToString(keysJsonPtr) || "[]"); }
+        catch (e) {
+            {{{ makeDynCall("vii", "Yes2SDKPlayerCallbacks._getDataPtr") }}}(0, Yes2SDKPlayerCallbacks.allocateString("Invalid JSON: " + String(e)));
+            return;
+        }
 
         if (window.Yes2SDK && window.Yes2SDK.player) {
             window.Yes2SDK.player.getDataAsync(keys)
@@ -45,13 +50,18 @@ var Yes2SDKPlayerLib = {
                     {{{ makeDynCall("vii", "Yes2SDKPlayerCallbacks._getDataPtr") }}}(0, Yes2SDKPlayerCallbacks.allocateString(msg));
                 });
         } else {
-            {{{ makeDynCall("vii", "callback") }}}(0, Yes2SDKPlayerCallbacks.allocateString("SDK not initialized"));
+            {{{ makeDynCall("vii", "Yes2SDKPlayerCallbacks._getDataPtr") }}}(0, Yes2SDKPlayerCallbacks.allocateString("SDK not initialized"));
         }
     },
 
     Yes2SDK_player_setData: function (dataJsonPtr, callback) {
         Yes2SDKPlayerCallbacks._setDataPtr = callback;
-        var data = JSON.parse(UTF8ToString(dataJsonPtr) || "{}");
+        var data;
+        try { data = JSON.parse(UTF8ToString(dataJsonPtr) || "{}"); }
+        catch (e) {
+            {{{ makeDynCall("vii", "Yes2SDKPlayerCallbacks._setDataPtr") }}}(0, Yes2SDKPlayerCallbacks.allocateString("Invalid JSON: " + String(e)));
+            return;
+        }
 
         if (window.Yes2SDK && window.Yes2SDK.player) {
             window.Yes2SDK.player.setDataAsync(data)
@@ -63,7 +73,7 @@ var Yes2SDKPlayerLib = {
                     {{{ makeDynCall("vii", "Yes2SDKPlayerCallbacks._setDataPtr") }}}(0, Yes2SDKPlayerCallbacks.allocateString(msg));
                 });
         } else {
-            {{{ makeDynCall("vii", "callback") }}}(0, Yes2SDKPlayerCallbacks.allocateString("SDK not initialized"));
+            {{{ makeDynCall("vii", "Yes2SDKPlayerCallbacks._setDataPtr") }}}(0, Yes2SDKPlayerCallbacks.allocateString("SDK not initialized"));
         }
     }
 }

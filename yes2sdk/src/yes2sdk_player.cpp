@@ -6,20 +6,22 @@ lua_Listener onSetDataListener;
 
 void Yes2SDKPlayer::OnGetData(const int success, const char* data) {
     lua_State* L = onGetDataListener.m_L;
+    if (!L) return;
     int top = lua_gettop(L);
     lua_pushlistener(L, onGetDataListener);
     lua_pushboolean(L, success);
-    lua_pushstring(L, data);
+    if (data) { lua_pushstring(L, data); } else { lua_pushnil(L); }
     int ret = lua_pcall(L, 3, 0, 0);
     if (ret != 0) { lua_pop(L, 1); }
     assert(top == lua_gettop(L));
 }
 void Yes2SDKPlayer::OnSetData(const int success, const char* error) {
     lua_State* L = onSetDataListener.m_L;
+    if (!L) return;
     int top = lua_gettop(L);
     lua_pushlistener(L, onSetDataListener);
     lua_pushboolean(L, success);
-    lua_pushstring(L, error);
+    if (error) { lua_pushstring(L, error); } else { lua_pushnil(L); }
     int ret = lua_pcall(L, 3, 0, 0);
     if (ret != 0) { lua_pop(L, 1); }
     assert(top == lua_gettop(L));

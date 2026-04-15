@@ -9,9 +9,10 @@ lua_Listener onAdDismissedListener;
 lua_Listener onAdViewedListener;
 lua_Listener onNoFillListener;
 
-void Yes2SDKAds::OnBeforeAd(const int success)
+void Yes2SDKAds::OnBeforeAd(const int success, const char *detail)
 {
     lua_State *L = onBeforeAdListener.m_L;
+    if (!L) return;
     int top = lua_gettop(L);
     lua_pushlistener(L, onBeforeAdListener);
     lua_pushboolean(L, success);
@@ -20,9 +21,10 @@ void Yes2SDKAds::OnBeforeAd(const int success)
     assert(top == lua_gettop(L));
 }
 
-void Yes2SDKAds::OnAfterAd(const int success)
+void Yes2SDKAds::OnAfterAd(const int success, const char *detail)
 {
     lua_State *L = onAfterAdListener.m_L;
+    if (!L) return;
     int top = lua_gettop(L);
     lua_pushlistener(L, onAfterAdListener);
     lua_pushboolean(L, success);
@@ -31,9 +33,10 @@ void Yes2SDKAds::OnAfterAd(const int success)
     assert(top == lua_gettop(L));
 }
 
-void Yes2SDKAds::OnAdDismissed(const int success)
+void Yes2SDKAds::OnAdDismissed(const int success, const char *detail)
 {
     lua_State *L = onAdDismissedListener.m_L;
+    if (!L) return;
     int top = lua_gettop(L);
     lua_pushlistener(L, onAdDismissedListener);
     lua_pushboolean(L, success);
@@ -42,9 +45,10 @@ void Yes2SDKAds::OnAdDismissed(const int success)
     assert(top == lua_gettop(L));
 }
 
-void Yes2SDKAds::OnAdViewed(const int success)
+void Yes2SDKAds::OnAdViewed(const int success, const char *detail)
 {
     lua_State *L = onAdViewedListener.m_L;
+    if (!L) return;
     int top = lua_gettop(L);
     lua_pushlistener(L, onAdViewedListener);
     lua_pushboolean(L, success);
@@ -53,9 +57,10 @@ void Yes2SDKAds::OnAdViewed(const int success)
     assert(top == lua_gettop(L));
 }
 
-void Yes2SDKAds::OnNoFill(const int success)
+void Yes2SDKAds::OnNoFill(const int success, const char *detail)
 {
     lua_State *L = onNoFillListener.m_L;
+    if (!L) return;
     int top = lua_gettop(L);
     lua_pushlistener(L, onNoFillListener);
     lua_pushboolean(L, success);

@@ -5,10 +5,11 @@ lua_Listener onSignInListener;
 
 void Yes2SDKAuth::OnSignIn(const int success, const char* error) {
     lua_State* L = onSignInListener.m_L;
+    if (!L) return;
     int top = lua_gettop(L);
     lua_pushlistener(L, onSignInListener);
     lua_pushboolean(L, success);
-    lua_pushstring(L, error);
+    if (error) { lua_pushstring(L, error); } else { lua_pushnil(L); }
     int ret = lua_pcall(L, 3, 0, 0);
     if (ret != 0) { lua_pop(L, 1); }
     assert(top == lua_gettop(L));
