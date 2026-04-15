@@ -34,7 +34,12 @@ var Yes2SDKGameLib = {
 
     Yes2SDK_game_inviteLink: function (paramsJsonPtr, callback) {
         if (window.Yes2SDK && window.Yes2SDK.game) {
-            var params = JSON.parse(UTF8ToString(paramsJsonPtr) || "{}");
+            var params;
+            try { params = JSON.parse(UTF8ToString(paramsJsonPtr) || "{}"); }
+            catch (e) {
+                {{{ makeDynCall("vii", "callback") }}}(0, Yes2SDKGameUtils.allocateString("Invalid JSON: " + String(e)));
+                return;
+            }
             window.Yes2SDK.game.inviteLinkAsync(params)
                 .then(function (url) {
                     {{{ makeDynCall("vii", "callback") }}}(1, Yes2SDKGameUtils.allocateString(url || ""));
