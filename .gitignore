@@ -1,6 +1,24 @@
+# Defold build artifacts
+/.internal
+/build
+builtins
+*.der
+
+# Archives
+*.zip
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDEs
+.vs/
+.vscode/
+.vsconfig
+.idea/
+*.iml
+
+# Legacy example paths
 example/build/
 example/.internal/
 example/.editor_settings
-example/manifest.*.der
-*.zip
-.DS_Store
