@@ -9,31 +9,51 @@ var Yes2SDKAdsLib = {
 
         beforeAd: function () {
             if (Yes2SDKAdsCallbacks._beforeAdPtr) {
-                {{{ makeDynCall("vii", "Yes2SDKAdsCallbacks._beforeAdPtr") }}}(1, 0);
+                try {
+                    {{{ makeDynCall("vii", "Yes2SDKAdsCallbacks._beforeAdPtr") }}}(1, 0);
+                } catch (e) {
+                    console.error("[Yes2SDK] beforeAd callback error:", e);
+                }
             }
         },
 
         afterAd: function () {
             if (Yes2SDKAdsCallbacks._afterAdPtr) {
-                {{{ makeDynCall("vii", "Yes2SDKAdsCallbacks._afterAdPtr") }}}(1, 0);
+                try {
+                    {{{ makeDynCall("vii", "Yes2SDKAdsCallbacks._afterAdPtr") }}}(1, 0);
+                } catch (e) {
+                    console.error("[Yes2SDK] afterAd callback error:", e);
+                }
             }
         },
 
         adDismissed: function () {
             if (Yes2SDKAdsCallbacks._adDismissedPtr) {
-                {{{ makeDynCall("vii", "Yes2SDKAdsCallbacks._adDismissedPtr") }}}(1, 0);
+                try {
+                    {{{ makeDynCall("vii", "Yes2SDKAdsCallbacks._adDismissedPtr") }}}(1, 0);
+                } catch (e) {
+                    console.error("[Yes2SDK] adDismissed callback error:", e);
+                }
             }
         },
 
         adViewed: function () {
             if (Yes2SDKAdsCallbacks._adViewedPtr) {
-                {{{ makeDynCall("vii", "Yes2SDKAdsCallbacks._adViewedPtr") }}}(1, 0);
+                try {
+                    {{{ makeDynCall("vii", "Yes2SDKAdsCallbacks._adViewedPtr") }}}(1, 0);
+                } catch (e) {
+                    console.error("[Yes2SDK] adViewed callback error:", e);
+                }
             }
         },
 
         noFill: function () {
             if (Yes2SDKAdsCallbacks._noFillPtr) {
-                {{{ makeDynCall("vii", "Yes2SDKAdsCallbacks._noFillPtr") }}}(1, 0);
+                try {
+                    {{{ makeDynCall("vii", "Yes2SDKAdsCallbacks._noFillPtr") }}}(1, 0);
+                } catch (e) {
+                    console.error("[Yes2SDK] noFill callback error:", e);
+                }
             }
         }
     },
