@@ -10,10 +10,12 @@ In your `game.project`, add:
 
 ```ini
 [project]
-dependencies#0 = https://github.com/yes2games/yes2sdk-defold/archive/refs/tags/v1.2.0.zip
+dependencies#0 = https://github.com/yes2games/yes2sdk-defold/archive/refs/tags/v1.2.1.zip
 ```
 
 Then in Defold Editor: **Project > Fetch Libraries**
+
+> **First time?** You must Fetch Libraries before `yes2sdk` is available in your scripts. Without it, `require "yes2sdk.yes2sdk"` will fail with "module not found".
 
 > **Note:** Always use a tagged release URL (not `/refs/heads/main.zip`). Tagged archives are cached more reliably by GitHub and Defold's library fetcher.
 
@@ -45,6 +47,8 @@ function final(self)
     yes2sdk.session_gameplay_stop()
 end
 ```
+
+> **Important:** `start_game()` must only be called after `initialize()` succeeds. Always call it inside the initialize success callback as shown above. Calling it separately or before init completes causes undefined platform behavior.
 
 ### 3. Show Ads (Required for Monetization)
 
@@ -222,6 +226,14 @@ This replaces the default Defold loading bar with:
 - Slim progress bar with shimmer animation
 - Smooth fade-out when loading completes
 
+### Loading Progress
+
+The engine template automatically reports Defold's download progress to the loading screen — no Lua code needed for the initial load.
+
+The `set_loading_progress(progress)` Lua function is for **game-specific loading** that happens after the engine starts (e.g., LiveUpdate content downloads, procedural generation, asset streaming). If your game has no post-engine loading phase, you don't need to call it.
+
+> **Note:** Calling `set_loading_progress()` after `start_game()` has no visible effect — the loading screen is already dismissed by then.
+
 ## Build & Deploy
 
 1. **Build:** Project > Bundle > HTML5 Application > Create Bundle
@@ -238,13 +250,13 @@ This replaces the default Defold loading bar with:
 
 Defold requires a `game.project` file at the root of any library dependency. Without it, `Fetch Libraries` silently skips the archive — no error message, the library simply doesn't appear.
 
-**This was a bug in Yes2SDK versions prior to v1.2.0.** The repo was missing the required `game.project` file.
+**This was a bug in Yes2SDK versions prior to v1.2.1.** The repo was missing the required `game.project` file.
 
-**Fix:** Update your dependency to v1.2.0 or later:
+**Fix:** Update your dependency to v1.2.1 or later:
 
 ```ini
 [project]
-dependencies#0 = https://github.com/yes2games/yes2sdk-defold/archive/refs/tags/v1.2.0.zip
+dependencies#0 = https://github.com/yes2games/yes2sdk-defold/archive/refs/tags/v1.2.1.zip
 ```
 
 Then clear the cache and retry:
@@ -266,7 +278,7 @@ Make sure your `game.project` uses a tagged release, not a branch:
 
 ```ini
 # Good — tagged release (reliable)
-dependencies#0 = https://github.com/yes2games/yes2sdk-defold/archive/refs/tags/v1.2.0.zip
+dependencies#0 = https://github.com/yes2games/yes2sdk-defold/archive/refs/tags/v1.2.1.zip
 
 # Bad — branch archive (intermittent failures)
 dependencies#0 = https://github.com/yes2games/yes2sdk-defold/archive/refs/heads/main.zip
