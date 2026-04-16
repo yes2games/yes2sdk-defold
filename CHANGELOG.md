@@ -4,6 +4,20 @@ All notable changes to Yes2SDK for Defold will be documented in this file.
 
 Format follows [Keep a Changelog](https://keepachangelog.com/). Versioning follows [Semantic Versioning](https://semver.org/).
 
+## [1.2.1] - 2026-04-16
+
+### Fixed
+- **Engine template broken for direct Defold bundling** — Template used `{{DEFOLD_BINARY_PREFIX}}`, `{{DEFOLD_APP_TITLE}}`, etc. which are not real Defold variables. Replaced with standard Defold template variables (`{{exe-name}}`, `{{project.title}}`, `{{display.width}}`, `{{display.height}}`). Heap size hardcoded to 256MB. Previously, using the template with `Project > Bundle` resulted in a permanent black screen because the engine binary path was a literal placeholder string.
+- **Missing keyboard scroll prevention** — Arrow keys and space bar scrolled the browser page behind the game canvas. Added `keydown` event listener to prevent default on game keys.
+- **Missing canvas focus handling** — Keyboard input didn't work until the player clicked the canvas. Added auto-focus on page load and click-to-refocus handler.
+
+### Added
+- **Lua wrapper nil guard with helpful error message** — When native extension isn't loaded (using `Project > Build` instead of `Bundle`), the wrapper now prints a clear error once and provides a stub that no-ops all SDK calls. Games can run in the editor without crashing.
+- **Complete Lua wrapper** — Expanded from 9 functions to all 35 (analytics, player, auth, data, game, banners, score were missing). All native extension functions are now accessible via `require "yes2sdk.yes2sdk"`.
+- **README: loading progress documentation** — Clarifies that the engine template auto-reports download progress; `set_loading_progress()` is only for game-specific post-engine loading.
+- **README: init + start_game coupling warning** — Explicit warning that `start_game()` must only be called inside the `initialize()` success callback.
+- **README: Fetch Libraries note** — Reminds new developers to Fetch Libraries before the module is available.
+
 ## [1.2.0] - 2026-04-15
 
 ### Fixed
