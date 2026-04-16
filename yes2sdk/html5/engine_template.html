@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta http-equiv="Content-Type" content="text/html; charset=utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-  <title>{{DEFOLD_APP_TITLE}}</title>
+  <title>{{project.title}}</title>
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
     html, body { width: 100%; height: 100%; overflow: hidden; background: #0a0a0a; }
@@ -130,7 +130,7 @@
 </head>
 <body>
   <div id="canvas-container">
-    <canvas id="canvas" tabindex="1" width="{{DEFOLD_DISPLAY_WIDTH}}" height="{{DEFOLD_DISPLAY_HEIGHT}}"></canvas>
+    <canvas id="canvas" tabindex="1" width="{{display.width}}" height="{{display.height}}"></canvas>
   </div>
 
   <!-- Yes2Games Loading Screen -->
@@ -198,7 +198,7 @@
         archive_location_filter: function(path) { return path; },
         engine_arguments: [],
         persistent_storage: true,
-        custom_heap_size: {{DEFOLD_HEAP_SIZE}},
+        custom_heap_size: 268435456,
         disable_context_menu: true
       };
 
@@ -226,11 +226,30 @@
         }
       };
 
-      EngineLoader.load("canvas", "{{DEFOLD_BINARY_PREFIX}}", extra_params);
+      EngineLoader.load("canvas", "{{exe-name}}", extra_params);
     }
 
     // Kick off
     load_engine();
+  </script>
+
+  <script>
+    // Prevent arrow keys and space from scrolling the page
+    window.addEventListener("keydown", function(e) {
+      var keys = [32, 37, 38, 39, 40];
+      if (keys.indexOf(e.keyCode) > -1) {
+        e.preventDefault();
+      }
+    }, false);
+
+    // Ensure canvas receives keyboard input on load and click
+    window.addEventListener("load", function() {
+      var canvas = document.getElementById("canvas");
+      if (canvas) {
+        canvas.focus();
+        canvas.addEventListener("click", function() { canvas.focus(); });
+      }
+    });
   </script>
 </body>
 </html>
