@@ -4,6 +4,12 @@ All notable changes to Yes2SDK for Defold will be documented in this file.
 
 Format follows [Keep a Changelog](https://keepachangelog.com/). Versioning follows [Semantic Versioning](https://semver.org/).
 
+## [1.2.3] - 2026-04-16
+
+### Fixed
+- **Ad callback errors crash entire ad flow** — WASM `RuntimeError` from game Lua callbacks (e.g. `null function`) propagated back through the SDK and broke the entire `showRewarded`/`showInterstitial` call. All 5 ad callback invocations (`beforeAd`, `afterAd`, `adDismissed`, `adViewed`, `noFill`) now wrapped with try-catch in the JS bridge. Errors are logged to console as `[Yes2SDK] <callback> callback error:` without killing the ad cycle.
+- **`excluded_content.zip` docs incorrectly said "harmless"** — Corrected README to explain the 404 is only harmless when the game does not use Defold's Exclude Resources feature. Games that do use it will crash with `RuntimeError: null function` if the file is missing from the upload.
+
 ## [1.2.1] - 2026-04-16
 
 ### Fixed
