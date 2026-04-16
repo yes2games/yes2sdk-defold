@@ -322,7 +322,9 @@ The `yes2sdk` Lua module is nil at runtime. This means the native extension wasn
 
 ### `excluded_content.zip` 404 error in console
 
-This is Defold's LiveUpdate feature looking for excluded content. It's harmless and doesn't affect your game or SDK integration. You can safely ignore it.
+This is Defold's LiveUpdate feature looking for excluded content. If your project does **not** use Exclude Resources (the default), this 404 is harmless and can be ignored.
+
+However, if your project **does** use Exclude Resources (`game.project` → `liveupdate.enabled`), this 404 means the excluded content was not uploaded alongside your game bundle. This will cause missing resources at runtime and may result in `RuntimeError: null function` crashes when game code tries to access excluded assets. Make sure `excluded_content.zip` is included in your upload.
 
 ### Game plays but no SDK events in inspector
 
