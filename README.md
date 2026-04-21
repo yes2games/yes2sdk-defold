@@ -1,6 +1,6 @@
 # Yes2SDK for Defold
 
-Integrate your Defold HTML5 game with Poki, CrazyGames, Yandex, Game Distribution, and YouTube Playables — using a single API.
+A single SDK for your Defold HTML5 game. Integrate once against Yes2SDK, submit through the Yes2Games Dashboard, and the Yes2Games team handles the rest.
 
 ## Quick Start
 
@@ -21,7 +21,7 @@ Then in Defold Editor: **Project > Fetch Libraries**
 
 ### 2. Minimum Integration (Required)
 
-These calls are **mandatory** for all platforms. Your game will be rejected without them.
+These calls are **mandatory**. Without them the SDK is not considered integrated and the Yes2Games team can't accept your build.
 
 ```lua
 function init(self)
@@ -32,7 +32,7 @@ function init(self)
             return
         end
 
-        -- Step 2: Signal game is ready to play
+        -- Step 2: Signal the game is playable
         yes2sdk.start_game(function(self, success, error)
             if success then
                 -- Step 3: Start gameplay tracking
@@ -48,9 +48,9 @@ function final(self)
 end
 ```
 
-> **Important:** `start_game()` must only be called after `initialize()` succeeds. Always call it inside the initialize success callback as shown above. Calling it separately or before init completes causes undefined platform behavior.
+> **Important:** `start_game()` must only be called after `initialize()` succeeds. Always call it inside the initialize success callback. Calling it separately or before init completes causes undefined behavior.
 
-### 3. Show Ads (Required for Monetization)
+### 3. Show Ads (Required)
 
 **Interstitial** — show between levels, after game over, or at natural break points:
 
@@ -75,7 +75,7 @@ function show_interstitial(self)
 end
 ```
 
-**Rewarded** — show when player chooses to watch (revive, double coins, etc):
+**Rewarded** — show when the player chooses to watch (revive, double coins, etc):
 
 ```lua
 function show_rewarded(self)
@@ -107,28 +107,27 @@ end
 
 ## Full API Reference
 
-### Core (Mandatory)
+### Core (Required)
 
 | Function | Description |
 |----------|-------------|
 | `yes2sdk.initialize(callback)` | Initialize the SDK. **Must be called first.** Callback: `function(self, success, error)` |
-| `yes2sdk.start_game(callback)` | Signal game is ready. **Must be called after initialize.** Callback: `function(self, success, error)` |
+| `yes2sdk.start_game(callback)` | Signal the game is playable. **Must be called after initialize.** Callback: `function(self, success, error)` |
 | `yes2sdk.set_loading_progress(progress)` | Report loading progress (0-100). Call during asset loading. |
-| `yes2sdk.get_platform()` | Returns current platform name: `"poki"`, `"crazygames"`, `"yandex"`, `"debug"`, etc. |
 
-### Ads (Mandatory for Monetization)
+### Ads (Required)
 
 | Function | Description |
 |----------|-------------|
 | `yes2sdk.ads_show_interstitial(placement, beforeAd, afterAd, noFill)` | Show interstitial ad. `placement` is a string like `"next-level"`. |
-| `yes2sdk.ads_show_rewarded(placement, beforeAd, afterAd, adDismissed, adViewed, noFill)` | Show rewarded ad. Grant reward only in `adViewed` callback. |
+| `yes2sdk.ads_show_rewarded(placement, beforeAd, afterAd, adDismissed, adViewed, noFill)` | Show rewarded ad. Grant reward only in `adViewed`. |
 
-### Session / Gameplay (Mandatory for Poki & CrazyGames)
+### Session / Gameplay (Required)
 
 | Function | Description |
 |----------|-------------|
-| `yes2sdk.session_gameplay_start()` | Call when player starts actively playing. |
-| `yes2sdk.session_gameplay_stop()` | Call when player stops (menu, loading, before ads). |
+| `yes2sdk.session_gameplay_start()` | Call when the player starts actively playing. |
+| `yes2sdk.session_gameplay_stop()` | Call when the player stops (menu, loading, before ads). |
 | `yes2sdk.session_get_locale()` | Returns player's locale code (e.g. `"en"`, `"ja"`, `"ru"`). |
 
 ### Analytics
@@ -144,7 +143,7 @@ end
 
 ### Data (Key-Value Storage)
 
-Persists across sessions. Uses `localStorage` on most platforms, cloud save on Yandex/YouTube.
+Persists across sessions automatically.
 
 | Function | Description |
 |----------|-------------|
@@ -158,32 +157,34 @@ Persists across sessions. Uses `localStorage` on most platforms, cloud save on Y
 | `yes2sdk.data_delete_key(key)` | Delete a key. |
 | `yes2sdk.data_delete_all()` | Delete all saved data. |
 
-### Player
+### Player (optional)
 
 | Function | Description |
 |----------|-------------|
-| `yes2sdk.player_get_name()` | Returns player display name (platform-dependent). |
-| `yes2sdk.player_get_id()` | Returns player ID (platform-dependent). |
+| `yes2sdk.player_get_name()` | Returns player display name (anonymous if sign-in isn't available). |
+| `yes2sdk.player_get_id()` | Returns player ID. |
 | `yes2sdk.player_get_data(keys_json, callback)` | Get cloud player data. `keys_json`: JSON array string. Callback: `function(self, success, data_json)` |
 | `yes2sdk.player_set_data(data_json, callback)` | Set cloud player data. `data_json`: JSON object string. Callback: `function(self, success, error)` |
 
-### Auth
+### Auth (optional)
+
+Not guaranteed to be available at runtime — calls resolve gracefully when unsupported.
 
 | Function | Description |
 |----------|-------------|
 | `yes2sdk.auth_is_authenticated()` | Returns `true`/`false`. |
 | `yes2sdk.auth_sign_in(callback)` | Trigger sign-in prompt. Callback: `function(self, success, error)` |
 
-### Game
+### Game (optional)
 
 | Function | Description |
 |----------|-------------|
-| `yes2sdk.game_happy_time()` | Signal a happy moment (CrazyGames highlights). |
-| `yes2sdk.game_get_settings()` | Returns platform game settings as JSON string. |
+| `yes2sdk.game_happy_time()` | Signal a "happy moment" (high score, level complete). |
+| `yes2sdk.game_get_settings()` | Returns runtime settings as JSON string. |
 | `yes2sdk.game_copy_to_clipboard(text)` | Copy text to clipboard. |
 | `yes2sdk.game_invite_link(params_json, callback)` | Generate invite link. Callback: `function(self, success, url)` |
 
-### Banners
+### Banners (optional)
 
 | Function | Description |
 |----------|-------------|
@@ -191,26 +192,27 @@ Persists across sessions. Uses `localStorage` on most platforms, cloud save on Y
 | `yes2sdk.banners_hide(id)` | Hide specific banner. |
 | `yes2sdk.banners_hide_all()` | Hide all banners. |
 
-### Score
+### Score (optional)
 
 | Function | Description |
 |----------|-------------|
-| `yes2sdk.score_add(score)` | Submit a score to the platform. |
-| `yes2sdk.score_submit(encrypted)` | Submit encrypted score (platform-specific). |
+| `yes2sdk.score_add(score)` | Submit a score. |
+| `yes2sdk.score_submit(encrypted)` | Submit encrypted score. |
 
-## Platform Compliance Checklist
+## Integration Checklist
 
-Your game **must** implement these to pass platform review:
+Your game **must** meet these requirements for the Yes2Games team to accept your build:
 
-| Requirement | Poki | CrazyGames | Yandex | All |
-|-------------|:----:|:----------:|:------:|:---:|
-| `initialize()` + `start_game()` | Required | Required | Required | Required |
-| `session_gameplay_start/stop()` | Required | Required | Recommended | Required |
-| Interstitial ads between levels | Required | Required | Required | Required |
-| Pause game during ads (`beforeAd`) | Required | Required | Required | Required |
-| Resume game after ads (`afterAd`) | Required | Required | Required | Required |
-| No ads during active gameplay | Required | Required | Required | Required |
-| Rewarded ads grant reward only on `adViewed` | Required | Required | Required | Required |
+- [ ] `initialize()` is called at startup
+- [ ] `set_loading_progress()` is called during loading
+- [ ] `start_game()` is called when loading completes (inside the initialize success callback)
+- [ ] Interstitial ads run at natural break points (level transitions, menus)
+- [ ] Rewarded ads grant reward **only** in `adViewed`
+- [ ] `session_gameplay_stop()` is called before every ad, `session_gameplay_start()` after
+- [ ] Gameplay resumes in `afterAd` AND `noFill` callbacks
+- [ ] No ads during active gameplay
+
+The QA Inspector in the Yes2Games Dashboard validates all of this automatically.
 
 ## Branded Loading Screen (Optional)
 
@@ -230,19 +232,17 @@ This replaces the default Defold loading bar with:
 
 The engine template automatically reports Defold's download progress to the loading screen — no Lua code needed for the initial load.
 
-The `set_loading_progress(progress)` Lua function is for **game-specific loading** that happens after the engine starts (e.g., LiveUpdate content downloads, procedural generation, asset streaming). If your game has no post-engine loading phase, you don't need to call it.
+The `set_loading_progress(progress)` Lua function is for **game-specific loading** that happens after the engine starts (e.g. LiveUpdate content downloads, procedural generation, asset streaming). If your game has no post-engine loading phase, you don't need to call it.
 
 > **Note:** Calling `set_loading_progress()` after `start_game()` has no visible effect — the loading screen is already dismissed by then.
 
-## Build & Deploy
+## Build & Submit
 
 1. **Build:** Project > Bundle > HTML5 Application > Create Bundle
 2. **Zip** the output folder contents (the folder with `index.html`)
-3. **Upload** to Yes2SDK Dashboard (dashboard.yes2games.com)
-4. **Test** in the Inspector — verify SDK events appear
-5. **Bundle** for your target platform (Poki, CG, Yandex)
-6. **Download** the platform-specific zip
-7. **Upload** to the platform (inspector.poki.dev, CG developer portal, etc.)
+3. **Upload** the zip to the Yes2Games Dashboard
+4. Run through the **QA Inspector** and confirm every check is green
+5. **Request Review** — the Yes2Games team takes it from there
 
 ## Troubleshooting
 
@@ -266,15 +266,11 @@ Then clear the cache and retry:
 3. Reopen Defold Editor
 4. `Project > Fetch Libraries`
 
-If you were using v1.1.0 or earlier, this is the fix — those releases did not include the `game.project` file.
-
 ### "Couldn't install the following dependencies" when fetching library
 
 This usually happens when using a branch archive URL (`/refs/heads/main.zip`). GitHub serves these less reliably than tagged releases.
 
 **Fix: Use a tagged release URL** (recommended)
-
-Make sure your `game.project` uses a tagged release, not a branch:
 
 ```ini
 # Good — tagged release (reliable)
@@ -284,12 +280,7 @@ dependencies#0 = https://github.com/yes2games/yes2sdk-defold/archive/refs/tags/v
 dependencies#0 = https://github.com/yes2games/yes2sdk-defold/archive/refs/heads/main.zip
 ```
 
-Then clear the cache and retry:
-
-1. Close Defold Editor
-2. Delete `.internal/lib/` folder in your project directory
-3. Reopen Defold Editor
-4. `Project > Fetch Libraries`
+Then clear the cache and retry (see steps above).
 
 **Fallback: Manual install**
 
@@ -324,21 +315,13 @@ The `yes2sdk` Lua module is nil at runtime. This means the native extension wasn
 
 This is Defold's LiveUpdate feature looking for excluded content. If your project does **not** use Exclude Resources (the default), this 404 is harmless and can be ignored.
 
-However, if your project **does** use Exclude Resources (`game.project` → `liveupdate.enabled`), this 404 means the excluded content was not uploaded alongside your game bundle. This will cause missing resources at runtime and may result in `RuntimeError: null function` crashes when game code tries to access excluded assets. Make sure `excluded_content.zip` is included in your upload.
+However, if your project **does** use Exclude Resources (`game.project` → `liveupdate.enabled`), this 404 means the excluded content was not uploaded alongside your game bundle. This causes missing resources at runtime and may result in `RuntimeError: null function` crashes when game code tries to access excluded assets. Make sure `excluded_content.zip` is included in your upload.
 
-### Game plays but no SDK events in inspector
+### Game plays but no SDK events in Inspector
 
-1. Verify the extension is compiled: open browser console and check for `[Yes2SDK]` log messages
+1. Verify the extension is compiled: open the browser console and check for `[Yes2SDK]` log messages
 2. If no logs appear, the extension wasn't included — see "Extension not found" above
 3. Make sure your code calls `yes2sdk.initialize()` early (in `init()` of your main script)
-
-## Supported Platforms
-
-- Poki
-- CrazyGames
-- Yandex Games
-- Game Distribution
-- YouTube Playables
 
 ## License
 
