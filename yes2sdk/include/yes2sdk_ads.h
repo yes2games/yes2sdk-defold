@@ -15,6 +15,7 @@ public:
 
     static int ShowInterstitial(lua_State* L);
     static int ShowRewarded(lua_State* L);
+    static int IsRewardedAdAvailable(lua_State* L);
 
 private:
     static void OnBeforeAd(const int success, const char* detail);
@@ -37,6 +38,8 @@ extern "C"
                                    Yes2SDKAds::OnAdDismissedCallback adDismissed,
                                    Yes2SDKAds::OnAdViewedCallback adViewed,
                                    Yes2SDKAds::OnNoFillCallback noFill);
+
+    int Yes2SDK_ads_isRewardedAdAvailable();
 }
 
 // Note: Callback signatures use (int, const char*) to match the "vii" makeDynCall

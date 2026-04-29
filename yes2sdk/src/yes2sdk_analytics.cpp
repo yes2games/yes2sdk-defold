@@ -12,7 +12,9 @@ int Yes2SDKAnalytics::LogLevelEnd(lua_State* L) {
     const char* level = luaL_checkstring(L, 1);
     int score = luaL_optinteger(L, 2, 0);
     int success = lua_toboolean(L, 3);
-    Yes2SDK_analytics_logLevelEnd(level, score, success);
+    // Optional 4th arg: duration in seconds. nil/missing → -1 sentinel = "omit".
+    float durationSeconds = (float)luaL_optnumber(L, 4, -1.0);
+    Yes2SDK_analytics_logLevelEnd(level, score, success, durationSeconds);
     assert(top == lua_gettop(L));
     return 0;
 }

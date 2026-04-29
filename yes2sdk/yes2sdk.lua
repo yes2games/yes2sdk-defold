@@ -28,7 +28,15 @@ if not sdk then
   function sdk.data_get_string(key, def) warn() return def or "" end
   function sdk.data_has_key() warn() return false end
   function sdk.game_get_settings() warn() return "{}" end
+  function sdk.friends_is_supported() warn() return false end
+  function sdk.banners_is_supported() warn() return false end
+  function sdk.score_is_supported() warn() return false end
+  function sdk.ads_is_rewarded_ad_available() warn() return false end
 end
+
+-- True between any ads_show_* call and its after_ad / no_fill / dismissed completion.
+-- Used to reject concurrent ad calls and exposed via M.ads_is_ad_showing().
+local _ad_in_flight = false
 
 local M = {}
 
@@ -52,12 +60,56 @@ end
 
 -- ── Ads ──
 
+local function _wrap_ad_completion(cb)
+  -- Wrap a completion callback so it clears the in-flight flag before delegating.
+  return function(...)
+    _ad_in_flight = false
+    if cb then cb(...) end
+  end
+end
+
+local function _reject_concurrent(callback_name)
+  print("[Yes2SDK] " .. callback_name .. " rejected — another ad is already in flight (AdAlreadyShowing). Wait for after_ad/no_fill before calling Show* again.")
+end
+
 function M.ads_show_interstitial(placement, before_ad, after_ad, no_fill)
-  sdk.ads_show_interstitial(placement, before_ad, after_ad, no_fill)
+  if _ad_in_flight then
+    _reject_concurrent("ads_show_interstitial")
+    if no_fill then no_fill() end
+    return
+  end
+  _ad_in_flight = true
+  sdk.ads_show_interstitial(placement, before_ad, _wrap_ad_completion(after_ad), _wrap_ad_completion(no_fill))
 end
 
 function M.ads_show_rewarded(placement, before_ad, after_ad, ad_dismissed, ad_viewed, no_fill)
-  sdk.ads_show_rewarded(placement, before_ad, after_ad, ad_dismissed, ad_viewed, no_fill)
+  if _ad_in_flight then
+    _reject_concurrent("ads_show_rewarded")
+    if no_fill then no_fill() end
+    return
+  end
+  _ad_in_flight = true
+  sdk.ads_show_rewarded(
+    placement,
+    before_ad,
+    _wrap_ad_completion(after_ad),
+    _wrap_ad_completion(ad_dismissed),
+    ad_viewed,                              -- adViewed fires before afterAd; don't clear flag here
+    _wrap_ad_completion(no_fill)
+  )
+end
+
+--- Returns true while ads_show_interstitial / ads_show_rewarded is in flight.
+-- Use this to gate UI that triggers ads (e.g. disable a "Watch ad" button while one is already showing).
+function M.ads_is_ad_showing()
+  return _ad_in_flight
+end
+
+--- Best-effort check whether a rewarded ad is currently available.
+-- Most platforms don't expose explicit readiness — returns true while the platform's ad module is loaded.
+-- Treat as a hint; ads_show_rewarded() can still no-fill.
+function M.ads_is_rewarded_ad_available()
+  return sdk.ads_is_rewarded_ad_available()
 end
 
 -- ── Session ──
@@ -80,8 +132,14 @@ function M.analytics_log_level_start(level)
   sdk.analytics_log_level_start(level)
 end
 
-function M.analytics_log_level_end(level, score, success)
-  sdk.analytics_log_level_end(level, score, success)
+--- Log a level-end event.
+-- @param level Level identifier (string).
+-- @param score Score achieved (integer).
+-- @param success Whether the level was completed successfully (boolean).
+-- @param duration_seconds Optional duration of the level in seconds. Pass nil/missing to omit.
+function M.analytics_log_level_end(level, score, success, duration_seconds)
+  -- duration_seconds: nil/missing → -1 sentinel = omit. Negative is also treated as omit.
+  sdk.analytics_log_level_end(level, score, success, duration_seconds or -1)
 end
 
 function M.analytics_log_score(score, level)
@@ -198,6 +256,11 @@ function M.banners_hide_all()
   sdk.banners_hide_all()
 end
 
+--- Check whether banners are supported on the current platform.
+function M.banners_is_supported()
+  return sdk.banners_is_supported()
+end
+
 -- ── Score ──
 
 function M.score_add(score)
@@ -206,6 +269,25 @@ end
 
 function M.score_submit(encrypted)
   sdk.score_submit(encrypted)
+end
+
+--- Check whether score submission is supported on the current platform.
+function M.score_is_supported()
+  return sdk.score_is_supported()
+end
+
+-- ── Friends ──
+
+--- List the current player's friends with pagination.
+-- Callback signature: function(self, success, page_json) where page_json is a JSON
+-- string of the form '{"friends":[{"username":"...","id":"..."},...],"hasMore":true}'.
+function M.friends_list_friends(page, size, callback)
+  sdk.friends_list_friends(page, size, callback)
+end
+
+--- Check whether friends is supported on the current platform.
+function M.friends_is_supported()
+  return sdk.friends_is_supported()
 end
 
 return M

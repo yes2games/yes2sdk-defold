@@ -12,7 +12,7 @@ public:
 };
 extern "C" {
     void Yes2SDK_analytics_logLevelStart(const char* level);
-    void Yes2SDK_analytics_logLevelEnd(const char* level, int score, int success);
+    void Yes2SDK_analytics_logLevelEnd(const char* level, int score, int success, float durationSeconds);
     void Yes2SDK_analytics_logScore(int score, const char* level);
     void Yes2SDK_analytics_logTutorialStart();
     void Yes2SDK_analytics_logTutorialEnd();

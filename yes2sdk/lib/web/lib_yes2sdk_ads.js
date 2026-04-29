@@ -100,6 +100,15 @@ var Yes2SDKAdsLib = {
         } else {
             Yes2SDKAdsCallbacks.noFill();
         }
+    },
+
+    Yes2SDK_ads_isRewardedAdAvailable: function () {
+        try {
+            if (window.Yes2SDK && window.Yes2SDK.ads && typeof window.Yes2SDK.ads.isRewardedAdAvailable === 'function') {
+                return window.Yes2SDK.ads.isRewardedAdAvailable() ? 1 : 0;
+            }
+        } catch (e) {}
+        return 0;
     }
 }
 

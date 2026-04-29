@@ -102,4 +102,10 @@ int Yes2SDKAds::ShowRewarded(lua_State *L)
     return 0;
 }
 
+int Yes2SDKAds::IsRewardedAdAvailable(lua_State *L)
+{
+    lua_pushboolean(L, Yes2SDK_ads_isRewardedAdAvailable());
+    return 1;
+}
+
 #endif
