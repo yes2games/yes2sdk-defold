@@ -22,6 +22,15 @@ var Yes2SDKBannersLib = {
                 window.Yes2SDK.banners.hideAllBanners();
             }
         } catch (e) {}
+    },
+
+    Yes2SDK_banners_isSupported: function () {
+        try {
+            if (window.Yes2SDK && window.Yes2SDK.banners && typeof window.Yes2SDK.banners.isSupported === 'function') {
+                return window.Yes2SDK.banners.isSupported() ? 1 : 0;
+            }
+        } catch (e) {}
+        return 0;
     }
 }
 

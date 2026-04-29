@@ -4,6 +4,33 @@ All notable changes to Yes2SDK for Defold will be documented in this file.
 
 Format follows [Keep a Changelog](https://keepachangelog.com/). Versioning follows [Semantic Versioning](https://semver.org/).
 
+## [1.3.0] - 2026-04-29
+
+Round-1 integrator-feedback parity with Yes2SDK Unity v2.2.0. Additive — no breaking changes.
+
+### Added
+- **Friends module** — new native extension files (`yes2sdk_friends.h`, `.cpp`, `lib_yes2sdk_friends.js`) exposing `friends_list_friends(page, size, callback)` and `friends_is_supported()`. Callback receives `(self, success, page_json)` where `page_json` is `{"friends":[{"username","id"}],"hasMore":bool}`.
+- **`is_supported()` on optional modules** — `friends_is_supported()`, `banners_is_supported()`, `score_is_supported()`. Pair with the Optional APIs guard pattern in the README — gate UI before calling. Returns true on platforms that genuinely support the feature (CrazyGames for friends/banners; CrazyGames + Yandex + YouTube for score).
+- **`ads_is_rewarded_ad_available()`** — best-effort readiness check; returns true while the platform's ad module is loaded. Treat as a UI hint — `ads_show_rewarded` can still fire `no_fill`.
+- **`ads_is_ad_showing()`** — Lua-side flag tracking the in-flight state of `ads_show_interstitial` / `ads_show_rewarded`. The wrapper now rejects concurrent `ads_show_*` calls immediately and fires the rejected call's `no_fill` callback instead of letting two ad calls collide.
+- **`analytics_log_level_end` `duration_seconds` parameter** — optional 4th argument. `nil` or negative value omits the field (the JS bridge passes `undefined` to the Core SDK). Useful for racing / time-attack games.
+
+### Documentation
+- README rewritten to mirror the structure of Yes2SDK Unity 2.2.0:
+  - Version + Defold badges at the top.
+  - Three-stage Quick Start (init at launch → loading → start_game when playable) with a "don't chain" callout.
+  - Rewarded ad firing-order block: documents the Core SDK's order (`before_ad → ad_viewed/ad_dismissed/no_fill → after_ad`) and a "DO NOT grant rewards in `after_ad`" warning.
+  - Concurrent-ad-guard + readiness recipe combining `ads_is_ad_showing()` + `ads_is_rewarded_ad_available()`.
+  - Optional APIs section now uses `_is_supported()` guards for Friends/Banners/Score (mirrors Unity).
+  - New "Running alongside other SDKs" section: init order, single-owner pause/resume, single-owner ads.
+  - Analytics section shows the new `duration_seconds` argument.
+- Build & Submit section trimmed; defers detailed flow to the dashboard upload UX.
+
+### Notes
+- Requires the matching SuperSDK Core build live in the dashboard's `sdk-dist/` (yes2sdk-core round-4 / yes2Dashboard sync round-4 — already deployed).
+- Existing 3-arg callers of `analytics_log_level_end` keep working; the 4th arg defaults to `nil` (omitted).
+- The Lua wrapper's no-op stub adds the new `_is_supported` / `_is_rewarded_ad_available` functions returning `false` so editor builds don't error.
+
 ## [1.2.3] - 2026-04-16
 
 ### Fixed

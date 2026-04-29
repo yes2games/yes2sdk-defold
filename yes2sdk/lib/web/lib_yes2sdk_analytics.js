@@ -6,9 +6,10 @@ var Yes2SDKAnalyticsLib = {
         }
     },
 
-    Yes2SDK_analytics_logLevelEnd: function (levelPtr, score, success) {
+    Yes2SDK_analytics_logLevelEnd: function (levelPtr, score, success, durationSeconds) {
         if (window.Yes2SDK && window.Yes2SDK.analytics) {
-            window.Yes2SDK.analytics.logLevelEnd(UTF8ToString(levelPtr), score, success === 1);
+            var duration = durationSeconds < 0 ? undefined : durationSeconds;
+            window.Yes2SDK.analytics.logLevelEnd(UTF8ToString(levelPtr), score, success === 1, duration);
         }
     },
 

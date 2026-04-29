@@ -8,13 +8,14 @@
 #include "yes2sdk_game.h"
 #include "yes2sdk_banners.h"
 #include "yes2sdk_score.h"
+#include "yes2sdk_friends.h"
 #include "luautils.h"
 #include <dmsdk/sdk.h>
 
 #define EXTENSION_NAME Yes2SDK
 #define LIB_NAME "Yes2SDK"
 #define MODULE_NAME "yes2sdk"
-#define VERSION "1.2.1"
+#define VERSION "1.3.0"
 
 #if defined(DM_PLATFORM_HTML5)
 
@@ -112,6 +113,7 @@ static const luaL_reg Module_methods[] = {
     // Ads
     {"ads_show_interstitial", Yes2SDKAds::ShowInterstitial},
     {"ads_show_rewarded", Yes2SDKAds::ShowRewarded},
+    {"ads_is_rewarded_ad_available", Yes2SDKAds::IsRewardedAdAvailable},
 
     // Session / Gameplay
     {"session_gameplay_start", Yes2SDKSession::GameplayStart},
@@ -157,10 +159,16 @@ static const luaL_reg Module_methods[] = {
     {"banners_show", Yes2SDKBanners::Show},
     {"banners_hide", Yes2SDKBanners::Hide},
     {"banners_hide_all", Yes2SDKBanners::HideAll},
+    {"banners_is_supported", Yes2SDKBanners::IsSupported},
 
     // Score
     {"score_add", Yes2SDKScore::AddScore},
     {"score_submit", Yes2SDKScore::SubmitScore},
+    {"score_is_supported", Yes2SDKScore::IsSupported},
+
+    // Friends
+    {"friends_list_friends", Yes2SDKFriends::ListFriends},
+    {"friends_is_supported", Yes2SDKFriends::IsSupported},
 
     {0, 0}
 };

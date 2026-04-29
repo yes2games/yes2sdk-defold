@@ -21,4 +21,8 @@ int Yes2SDKBanners::HideAll(lua_State* L) {
     assert(top == lua_gettop(L));
     return 0;
 }
+int Yes2SDKBanners::IsSupported(lua_State* L) {
+    lua_pushboolean(L, Yes2SDK_banners_isSupported());
+    return 1;
+}
 #endif

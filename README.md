@@ -1,41 +1,79 @@
 # Yes2SDK for Defold
 
+[![Version](https://img.shields.io/github/v/tag/yes2games/yes2sdk-defold?label=version)](https://github.com/yes2games/yes2sdk-defold/releases)
+[![Defold](https://img.shields.io/badge/Defold-1.6%2B-blue)](https://defold.com/)
+
 A single SDK for your Defold HTML5 game. Integrate once against Yes2SDK, submit through the Yes2Games Dashboard, and the Yes2Games team handles the rest.
 
-## Quick Start
+## Requirements
 
-### 1. Add Dependency
+- Defold 1.6 or newer
+- HTML5 build target (the extension is HTML5-only — non-HTML5 platforms get a warn-and-no-op stub)
+
+## Installation
+
+### Via Git Dependency (recommended)
 
 In your `game.project`, add:
 
 ```ini
 [project]
-dependencies#0 = https://github.com/yes2games/yes2sdk-defold/archive/refs/tags/v1.2.1.zip
+dependencies#0 = https://github.com/yes2games/yes2sdk-defold/archive/refs/tags/v1.3.0.zip
 ```
 
-Then in Defold Editor: **Project > Fetch Libraries**
+Then in Defold Editor: **Project > Fetch Libraries**.
 
-> **First time?** You must Fetch Libraries before `yes2sdk` is available in your scripts. Without it, `require "yes2sdk.yes2sdk"` will fail with "module not found".
+> Pinning the URL with `tags/v1.3.0` keeps the resolved hash stable. Bump the tag (e.g. `tags/v1.4.0`) to upgrade. **Don't use `/refs/heads/main.zip`** — branch archives are served less reliably by GitHub and `Fetch Libraries` fails intermittently.
 
-> **Note:** Always use a tagged release URL (not `/refs/heads/main.zip`). Tagged archives are cached more reliably by GitHub and Defold's library fetcher.
+### Via Local Copy
 
-### 2. Minimum Integration (Required)
+1. Download the latest release from [Releases](https://github.com/yes2games/yes2sdk-defold/releases/latest)
+2. Copy the `yes2sdk/` folder into your project root:
+   ```
+   your-game/
+   ├── game.project
+   ├── yes2sdk/         ← copy here
+   │   ├── ext.manifest
+   │   ├── include/
+   │   ├── src/
+   │   ├── lib/web/
+   │   └── yes2sdk.lua
+   └── main/
+   ```
+3. Close and reopen Defold Editor.
 
-These calls are **mandatory**. Without them the SDK is not considered integrated and the Yes2Games team can't accept your build.
+---
+
+## Quick Start
+
+This is the **minimum integration** your game must have. The lifecycle has three distinct stages — don't chain them together:
+
+```text
+App launch         → yes2sdk.initialize       (SDK ready)
+Splash + loading   → yes2sdk.set_loading_progress(0..100) as assets load
+Game playable      → yes2sdk.start_game       (scene ready, accepting input)
+```
 
 ```lua
+local yes2sdk = require "yes2sdk.yes2sdk"
+
 function init(self)
-    -- Step 1: Initialize the SDK
+    -- Stage 1 — at app launch, initialize the SDK.
     yes2sdk.initialize(function(self, success, error)
         if not success then
-            print("SDK init failed: " .. tostring(error))
+            print("[Game] SDK init failed: " .. tostring(error))
             return
         end
+        print("[Game] SDK ready")
 
-        -- Step 2: Signal the game is playable
+        -- Stage 2 — load your assets and report progress (0..100).
+        -- The Defold engine template reports DOWNLOAD progress automatically.
+        -- Use set_loading_progress only for game-specific loading after the
+        -- engine starts (LiveUpdate, procedural generation, asset streaming).
+
+        -- Stage 3 — splash done, scene loaded, game is playable.
         yes2sdk.start_game(function(self, success, error)
             if success then
-                -- Step 3: Start gameplay tracking
                 yes2sdk.session_gameplay_start()
             end
         end)
@@ -43,176 +81,226 @@ function init(self)
 end
 
 function final(self)
-    -- Always stop gameplay tracking on exit
     yes2sdk.session_gameplay_stop()
 end
 ```
 
-> **Important:** `start_game()` must only be called after `initialize()` succeeds. Always call it inside the initialize success callback. Calling it separately or before init completes causes undefined behavior.
+> **Don't call `start_game` directly inside the `initialize` success handler if you have a splash/loading phase.** The platform's loading bar treats `start_game` as "the game is playable now". For games with no post-engine loading phase, calling them back-to-back is fine (Defold's engine template handles the initial download progress for you).
 
-### 3. Show Ads (Required)
+Without this flow your game won't be accepted for review.
 
-**Interstitial** — show between levels, after game over, or at natural break points:
+---
+
+## Core API
+
+Implement everything in this section. Together these cover what Yes2Games needs to validate and monetize your game.
+
+### Lifecycle (required)
+
+```lua
+yes2sdk.initialize(function(self, success, error) ... end)   -- once at startup
+yes2sdk.set_loading_progress(progress)                       -- 0..100 as assets load
+yes2sdk.start_game(function(self, success, error) ... end)   -- when game is playable
+```
+
+> **Important:** these three calls fire in three distinct stages. `initialize` is at app launch. `set_loading_progress` is updated as your assets load. `start_game` runs **only when the game is actually playable** (splash gone, scene loaded, accepting input).
+
+### Ads (required)
+
+Interstitial ads run at natural break points. Rewarded ads run only when the player opts in.
+
+> **Always wrap ad calls in `session_gameplay_stop()` / `session_gameplay_start()`.** Platforms count "active gameplay seconds" for monetization — leaving gameplay running during an ad inflates those numbers and is grounds for rejection.
 
 ```lua
 function show_interstitial(self)
-    -- Always stop gameplay before showing ads
     yes2sdk.session_gameplay_stop()
 
-    yes2sdk.ads_show_interstitial("level-complete",
-        function(self)
-            -- beforeAd: pause your game (mute audio, stop timers)
-        end,
-        function(self)
-            -- afterAd: resume your game
-            yes2sdk.session_gameplay_start()
-        end,
-        function(self)
-            -- noFill: no ad available, resume immediately
-            yes2sdk.session_gameplay_start()
-        end
+    yes2sdk.ads_show_interstitial("level-end",
+        function(self) end,                                  -- before_ad: pause
+        function(self) yes2sdk.session_gameplay_start() end, -- after_ad: resume
+        function(self) yes2sdk.session_gameplay_start() end  -- no_fill: resume immediately
     )
 end
-```
 
-**Rewarded** — show when the player chooses to watch (revive, double coins, etc):
-
-```lua
 function show_rewarded(self)
     yes2sdk.session_gameplay_stop()
 
-    yes2sdk.ads_show_rewarded("revive",
-        function(self)
-            -- beforeAd: pause game
-        end,
-        function(self)
-            -- afterAd: ad closed, resume
-            yes2sdk.session_gameplay_start()
-        end,
-        function(self)
-            -- adDismissed: user skipped, NO reward
-            yes2sdk.session_gameplay_start()
-        end,
-        function(self)
-            -- adViewed: user watched full ad, GRANT REWARD
-            grant_revive()
-        end,
-        function(self)
-            -- noFill: no ad available
-            yes2sdk.session_gameplay_start()
-        end
+    yes2sdk.ads_show_rewarded("extra-life",
+        function(self) end,                                       -- before_ad: pause
+        function(self) yes2sdk.session_gameplay_start() end,      -- after_ad: resume
+        function(self) yes2sdk.session_gameplay_start() end,      -- ad_dismissed: no reward
+        function(self) grant_extra_life() end,                    -- ad_viewed: GRANT REWARD
+        function(self) yes2sdk.session_gameplay_start() end       -- no_fill: resume
     )
 end
 ```
 
-## Full API Reference
+#### Rewarded ad firing order
 
-### Core (Required)
+The callbacks fire in this order. Pay attention — getting it wrong silently breaks reward logic:
 
-| Function | Description |
-|----------|-------------|
-| `yes2sdk.initialize(callback)` | Initialize the SDK. **Must be called first.** Callback: `function(self, success, error)` |
-| `yes2sdk.start_game(callback)` | Signal the game is playable. **Must be called after initialize.** Callback: `function(self, success, error)` |
-| `yes2sdk.set_loading_progress(progress)` | Report loading progress (0-100). Call during asset loading. |
+```text
+before_ad     → pause game (always)
+(ad shown)
+ad_viewed     → grant reward (ONLY fires if the player watched the full ad)
+   — or —
+ad_dismissed  → no reward (fires if the player skipped/closed early)
+   — or —
+no_fill       → no ad available (fires if the platform couldn't deliver)
+after_ad      → resume game (always — fires after the result)
+```
 
-### Ads (Required)
+> ⚠️ **Do NOT grant rewards in `after_ad`.** `after_ad` fires for completion, dismissal, and no-fill alike — granting rewards there gives them away on skip. Always grant in `ad_viewed`.
 
-| Function | Description |
-|----------|-------------|
-| `yes2sdk.ads_show_interstitial(placement, beforeAd, afterAd, noFill)` | Show interstitial ad. `placement` is a string like `"next-level"`. |
-| `yes2sdk.ads_show_rewarded(placement, beforeAd, afterAd, adDismissed, adViewed, noFill)` | Show rewarded ad. Grant reward only in `adViewed`. |
+#### Concurrent ad guard + readiness
 
-### Session / Gameplay (Required)
+- `yes2sdk.ads_is_ad_showing()` — returns `true` while a `ads_show_interstitial` or `ads_show_rewarded` is in flight (between the call and `after_ad`/`no_fill`). Calling `ads_show_*` again while one is already showing is rejected immediately and `no_fill` fires for the rejected call.
+- `yes2sdk.ads_is_rewarded_ad_available()` — best-effort check whether a rewarded ad appears available right now. Most platforms don't expose explicit readiness, so this returns `true` while the platform's ad module is loaded; the actual `ads_show_rewarded` call can still no-fill. Use it as a hint, not a guarantee.
 
-| Function | Description |
-|----------|-------------|
-| `yes2sdk.session_gameplay_start()` | Call when the player starts actively playing. |
-| `yes2sdk.session_gameplay_stop()` | Call when the player stops (menu, loading, before ads). |
-| `yes2sdk.session_get_locale()` | Returns player's locale code (e.g. `"en"`, `"ja"`, `"ru"`). |
+```lua
+local can_show_reward = not yes2sdk.ads_is_ad_showing()
+                    and yes2sdk.ads_is_rewarded_ad_available()
+gui.set_enabled(reward_button, can_show_reward)
+```
 
-### Analytics
+### Session / Gameplay (required)
 
-| Function | Description |
-|----------|-------------|
-| `yes2sdk.analytics_log_level_start(level_name)` | Log level start. |
-| `yes2sdk.analytics_log_level_end(level_name, score, success)` | Log level end. `success`: `true`/`false`. |
-| `yes2sdk.analytics_log_score(score [, level])` | Log a score. |
-| `yes2sdk.analytics_log_tutorial_start()` | Log tutorial begin. |
-| `yes2sdk.analytics_log_tutorial_end()` | Log tutorial complete. |
-| `yes2sdk.analytics_log_game_choice(decision, choice)` | Log a player decision (e.g. `"character"`, `"wizard"`). |
+Tells Yes2Games when an active round begins and ends. Also call `session_gameplay_stop()` before any ad and `session_gameplay_start()` after.
 
-### Data (Key-Value Storage)
+```lua
+yes2sdk.session_gameplay_start()
+yes2sdk.session_gameplay_stop()
 
-Persists across sessions automatically.
+local locale = yes2sdk.session_get_locale()  -- e.g. "en", "ja", "ru"
+```
 
-| Function | Description |
-|----------|-------------|
-| `yes2sdk.data_get_int(key [, default])` | Get integer. Returns `default` (0) if not found. |
-| `yes2sdk.data_set_int(key, value)` | Save integer. |
-| `yes2sdk.data_get_float(key [, default])` | Get float. Returns `default` (0.0) if not found. |
-| `yes2sdk.data_set_float(key, value)` | Save float. |
-| `yes2sdk.data_get_string(key [, default])` | Get string. Returns `default` ("") if not found. |
-| `yes2sdk.data_set_string(key, value)` | Save string. |
-| `yes2sdk.data_has_key(key)` | Returns `true`/`false`. |
-| `yes2sdk.data_delete_key(key)` | Delete a key. |
-| `yes2sdk.data_delete_all()` | Delete all saved data. |
+> `analytics_log_level_start` / `_end` can also trigger gameplay start/stop on some platforms — use either pair, but don't call both.
 
-### Player (optional)
+### Data (required)
 
-| Function | Description |
-|----------|-------------|
-| `yes2sdk.player_get_name()` | Returns player display name (anonymous if sign-in isn't available). |
-| `yes2sdk.player_get_id()` | Returns player ID. |
-| `yes2sdk.player_get_data(keys_json, callback)` | Get cloud player data. `keys_json`: JSON array string. Callback: `function(self, success, data_json)` |
-| `yes2sdk.player_set_data(data_json, callback)` | Set cloud player data. `data_json`: JSON object string. Callback: `function(self, success, error)` |
+Key-value storage. Persists across sessions automatically.
 
-### Auth (optional)
+```lua
+yes2sdk.data_set_int("highScore", 9999)
+yes2sdk.data_set_string("playerName", "Alice")
+yes2sdk.data_set_float("volume", 0.75)
 
-Not guaranteed to be available at runtime — calls resolve gracefully when unsupported.
+local score  = yes2sdk.data_get_int("highScore", 0)
+local name   = yes2sdk.data_get_string("playerName", "Guest")
+local volume = yes2sdk.data_get_float("volume", 1.0)
 
-| Function | Description |
-|----------|-------------|
-| `yes2sdk.auth_is_authenticated()` | Returns `true`/`false`. |
-| `yes2sdk.auth_sign_in(callback)` | Trigger sign-in prompt. Callback: `function(self, success, error)` |
+if yes2sdk.data_has_key("highScore") then
+    yes2sdk.data_delete_key("highScore")
+end
+```
 
-### Game (optional)
+### Analytics (recommended)
 
-| Function | Description |
-|----------|-------------|
-| `yes2sdk.game_happy_time()` | Signal a "happy moment" (high score, level complete). |
-| `yes2sdk.game_get_settings()` | Returns runtime settings as JSON string. |
-| `yes2sdk.game_copy_to_clipboard(text)` | Copy text to clipboard. |
-| `yes2sdk.game_invite_link(params_json, callback)` | Generate invite link. Callback: `function(self, success, url)` |
+```lua
+yes2sdk.analytics_log_level_start("level-1")
+yes2sdk.analytics_log_level_end("level-1", 1500, true)
+-- Time-based games (racing, time-attack) can include duration:
+yes2sdk.analytics_log_level_end("level-1", 1500, true, 87.3)
+yes2sdk.analytics_log_score(9999)
+yes2sdk.analytics_log_tutorial_start()
+yes2sdk.analytics_log_tutorial_end()
+yes2sdk.analytics_log_game_choice("character", "wizard")
+```
 
-### Banners (optional)
+---
 
-| Function | Description |
-|----------|-------------|
-| `yes2sdk.banners_show(id, size)` | Show banner. `size`: `"728x90"`, `"300x250"`, etc. |
-| `yes2sdk.banners_hide(id)` | Hide specific banner. |
-| `yes2sdk.banners_hide_all()` | Hide all banners. |
+## Optional APIs
 
-### Score (optional)
+These modules add extra player-facing features. They are **not guaranteed** to be available at runtime — guard with `_is_supported()` (available on `auth`, `friends`, `banners`, `score`) and handle the unsupported case gracefully. Don't make your core gameplay depend on them.
 
-| Function | Description |
-|----------|-------------|
-| `yes2sdk.score_add(score)` | Submit a score. |
-| `yes2sdk.score_submit(encrypted)` | Submit encrypted score. |
+### Auth
+
+```lua
+if yes2sdk.auth_is_authenticated() then
+    -- already signed in
+else
+    yes2sdk.auth_sign_in(function(self, success, error)
+        if success then print("Signed in") end
+    end)
+end
+```
+
+### Friends
+
+```lua
+if yes2sdk.friends_is_supported() then
+    yes2sdk.friends_list_friends(0, 10, function(self, success, page_json)
+        if success then
+            local page = json.decode(page_json)
+            for _, friend in ipairs(page.friends) do
+                print(friend.username, friend.id)
+            end
+        end
+    end)
+end
+```
+
+### Banners
+
+```lua
+if yes2sdk.banners_is_supported() then
+    yes2sdk.banners_show("sidebar-left", "300x250")
+    yes2sdk.banners_hide("sidebar-left")
+    yes2sdk.banners_hide_all()
+end
+```
+
+### Score
+
+```lua
+if yes2sdk.score_is_supported() then
+    yes2sdk.score_add(9999)
+    yes2sdk.score_submit("encrypted-score-string")
+end
+```
+
+### Player Data (cloud)
+
+```lua
+yes2sdk.player_get_data(json.encode({"level"}), function(self, success, data_json)
+    if success then
+        local data = json.decode(data_json)
+        print(data.level)
+    end
+end)
+
+yes2sdk.player_set_data(json.encode({level = 5}), function(self, success, error) end)
+```
+
+### Game Extras
+
+```lua
+yes2sdk.game_happy_time()                         -- positive-moment signal
+yes2sdk.game_copy_to_clipboard("https://...")
+yes2sdk.game_invite_link(json.encode({roomId = "abc"}), function(self, success, url) end)
+local settings_json = yes2sdk.game_get_settings()
+```
+
+> `game_happy_time()` signals to the platform that the player just hit a positive moment — level cleared, achievement unlocked, boss defeated. Some platforms (notably CrazyGames) use this to time monetization prompts so they don't interrupt frustrating moments. Call it sparingly, only on genuine highs.
+
+---
 
 ## Integration Checklist
 
-Your game **must** meet these requirements for the Yes2Games team to accept your build:
+Your build is ready for review when:
 
-- [ ] `initialize()` is called at startup
-- [ ] `set_loading_progress()` is called during loading
-- [ ] `start_game()` is called when loading completes (inside the initialize success callback)
-- [ ] Interstitial ads run at natural break points (level transitions, menus)
-- [ ] Rewarded ads grant reward **only** in `adViewed`
-- [ ] `session_gameplay_stop()` is called before every ad, `session_gameplay_start()` after
-- [ ] Gameplay resumes in `afterAd` AND `noFill` callbacks
-- [ ] No ads during active gameplay
+- [ ] `initialize` is called at startup
+- [ ] `set_loading_progress` is called as assets load (or you rely on the engine template's automatic download progress)
+- [ ] `start_game` is called when the game is playable
+- [ ] Interstitial ads run at natural break points
+- [ ] Rewarded ads grant reward **only** in `ad_viewed`
+- [ ] `session_gameplay_stop()` is called before every ad; `session_gameplay_start()` after
+- [ ] Gameplay resumes in `after_ad` AND `no_fill`
+- [ ] `data_*` functions are used for persistent player data
 
 The QA Inspector in the Yes2Games Dashboard validates all of this automatically.
+
+---
 
 ## Branded Loading Screen (Optional)
 
@@ -228,100 +316,87 @@ This replaces the default Defold loading bar with:
 - Slim progress bar with shimmer animation
 - Smooth fade-out when loading completes
 
-### Loading Progress
-
-The engine template automatically reports Defold's download progress to the loading screen — no Lua code needed for the initial load.
-
-The `set_loading_progress(progress)` Lua function is for **game-specific loading** that happens after the engine starts (e.g. LiveUpdate content downloads, procedural generation, asset streaming). If your game has no post-engine loading phase, you don't need to call it.
+The template automatically reports Defold's download progress to the loading screen — no Lua code needed for the initial load. `set_loading_progress(progress)` is for **game-specific loading** that happens after the engine starts (LiveUpdate, procedural generation, etc.).
 
 > **Note:** Calling `set_loading_progress()` after `start_game()` has no visible effect — the loading screen is already dismissed by then.
 
+---
+
 ## Build & Submit
 
-1. **Build:** Project > Bundle > HTML5 Application > Create Bundle
-2. **Zip** the output folder contents (the folder with `index.html`)
-3. **Upload** the zip to the Yes2Games Dashboard
-4. Run through the **QA Inspector** and confirm every check is green
-5. **Request Review** — the Yes2Games team takes it from there
+1. **Build:** *Project > Bundle > HTML5 Application > Create Bundle*
+2. **Zip** the output folder (the folder containing `index.html`)
+3. **Upload** the zip to the [Yes2Games Dashboard](https://dashboard.yes2games.com)
+4. The dashboard handles SDK injection, platform bundling, and walks you through the QA Inspector and review request.
+
+> Always use **Project > Bundle** for HTML5, not **Project > Build**. The regular Build command doesn't compile native extensions through the build cloud.
+
+---
+
+## Editor Testing
+
+The native extension is HTML5-only. In the Defold editor, all `yes2sdk.*` calls run against a no-op stub that prints a one-time warning and returns sensible defaults. To exercise real SDK behavior, build for HTML5 and run via *Bundle > HTML5 Application > Create Bundle*, or use the QA Inspector in the Yes2Games Dashboard for richer simulation (forced errors, specific locales, ad failure modes).
+
+---
+
+## Running alongside other SDKs
+
+Real games often ship with multiple platform SDKs in the same build (Yes2SDK + Poki + Yandex + Playgama, etc.). A few ground rules to keep them from stepping on each other:
+
+- **Init order.** Initialize Yes2SDK first. Yes2SDK figures out which actual platform is hosting the game and routes through it — initializing your own platform SDK directly first can race with Yes2SDK's detection.
+- **One owner for pause / resume.** Pick one SDK to drive your game's pause state. If both Yes2SDK and another SDK call resume/pause via callbacks, you'll get oscillation. Recommended: handle pause/resume only via Yes2SDK's `ads_show_*` `before_ad` / `after_ad` callbacks.
+- **One owner for ads.** Don't call ads via two SDKs in the same session — the platform almost always rejects the second call. Pick the SDK that targets the platform you're actually hosted on.
+
+---
 
 ## Troubleshooting
 
-### Fetch Libraries silently fails (no error, but library not found)
+### `yes2sdk` is nil at runtime
 
-Defold requires a `game.project` file at the root of any library dependency. Without it, `Fetch Libraries` silently skips the archive — no error message, the library simply doesn't appear.
+The native extension wasn't compiled. You used **Project > Build** instead of **Project > Bundle > HTML5 Application > Create Bundle**. Bundle compiles extensions through Defold's build cloud.
 
-**This was a bug in Yes2SDK versions prior to v1.2.1.** The repo was missing the required `game.project` file.
+### "Couldn't install dependencies" when fetching the library
 
-**Fix:** Update your dependency to v1.2.1 or later:
-
-```ini
-[project]
-dependencies#0 = https://github.com/yes2games/yes2sdk-defold/archive/refs/tags/v1.2.1.zip
-```
-
-Then clear the cache and retry:
-
-1. Close Defold Editor
-2. Delete `.internal/lib/` folder in your project directory
-3. Reopen Defold Editor
-4. `Project > Fetch Libraries`
-
-### "Couldn't install the following dependencies" when fetching library
-
-This usually happens when using a branch archive URL (`/refs/heads/main.zip`). GitHub serves these less reliably than tagged releases.
-
-**Fix: Use a tagged release URL** (recommended)
+Use a tagged release URL, not a branch archive. GitHub serves tagged archives more reliably:
 
 ```ini
-# Good — tagged release (reliable)
-dependencies#0 = https://github.com/yes2games/yes2sdk-defold/archive/refs/tags/v1.2.1.zip
+# Good — tagged release
+dependencies#0 = https://github.com/yes2games/yes2sdk-defold/archive/refs/tags/v1.3.0.zip
 
 # Bad — branch archive (intermittent failures)
 dependencies#0 = https://github.com/yes2games/yes2sdk-defold/archive/refs/heads/main.zip
 ```
 
-Then clear the cache and retry (see steps above).
+If it still fails, fall back to the local-copy install (see Installation > Via Local Copy).
 
-**Fallback: Manual install**
+### `excluded_content.zip` 404 in console
 
-If fetch still fails (e.g. network/firewall issues):
+This is Defold's LiveUpdate feature looking for excluded content. If your project does **not** use Exclude Resources (the default), this 404 is harmless.
 
-1. Download from [GitHub Releases](https://github.com/yes2games/yes2sdk-defold/releases/latest)
-2. Extract the zip
-3. Copy the `yes2sdk/` folder into your game project root
-4. Your project should look like:
-   ```
-   your-game/
-   ├── game.project
-   ├── yes2sdk/          ← copy this folder here
-   │   ├── ext.manifest
-   │   ├── include/
-   │   ├── src/
-   │   └── lib/web/
-   └── main/
-   ```
-5. Remove the dependency line from `game.project` (optional — won't conflict)
-6. Close and reopen Defold Editor
+If your project **does** use Exclude Resources (`game.project` → `liveupdate.enabled`), this 404 means the excluded content was not uploaded alongside your game bundle. Include `excluded_content.zip` in your upload, or disable Exclude Resources and re-bundle.
 
-### Extension not found (`yes2sdk` is nil)
+### Game plays but no SDK events in the QA Inspector
 
-The `yes2sdk` Lua module is nil at runtime. This means the native extension wasn't compiled into the HTML5 build.
+1. Check the browser console for `[Yes2SDK]` log messages.
+2. If no logs appear, the extension wasn't included — see "extension nil" above.
+3. Make sure `yes2sdk.initialize()` is called early in `init()` of your main script.
 
-**Cause:** You used `Project > Build` instead of `Project > Bundle`.
+---
 
-**Fix:** Always use **Project > Bundle > HTML5 Application > Create Bundle** for HTML5 builds. The regular Build command doesn't compile native extensions through the build cloud.
+## Architecture
 
-### `excluded_content.zip` 404 error in console
+```
+Lua API (yes2sdk.lua)  ->  C++ extension (src/, include/)  ->  .js bridge (lib/web/)  ->  window.Yes2SDK.*
+                                                                                               ^
+                                                                              injected by the Yes2Games Dashboard
+```
 
-This is Defold's LiveUpdate feature looking for excluded content. If your project does **not** use Exclude Resources (the default), this 404 is harmless and can be ignored.
+- **Lua** (`yes2sdk.lua`) — high-level wrapper with a no-op stub for non-HTML5 builds.
+- **C++ extension** (`src/`, `include/`) — Lua ↔ JS glue via Defold's `dmsdk`. HTML5-only via `#if defined(DM_PLATFORM_HTML5)`.
+- **.jslib bridges** (`lib/web/`) — call `window.Yes2SDK.*` and dispatch results back through `makeDynCall`.
+- **HTML5 template** (`html5/engine_template.html`) — bare template; the dashboard injects the SuperSDK Core (`yes2sdk.umd.js`) at upload time.
 
-However, if your project **does** use Exclude Resources (`game.project` → `liveupdate.enabled`), this 404 means the excluded content was not uploaded alongside your game bundle. This causes missing resources at runtime and may result in `RuntimeError: null function` crashes when game code tries to access excluded assets. Make sure `excluded_content.zip` is included in your upload.
-
-### Game plays but no SDK events in Inspector
-
-1. Verify the extension is compiled: open the browser console and check for `[Yes2SDK]` log messages
-2. If no logs appear, the extension wasn't included — see "Extension not found" above
-3. Make sure your code calls `yes2sdk.initialize()` early (in `init()` of your main script)
+---
 
 ## License
 
