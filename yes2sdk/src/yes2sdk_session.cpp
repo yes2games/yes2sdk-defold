@@ -35,4 +35,12 @@ int Yes2SDKSession::GetLocale(lua_State *L)
     return 1;
 }
 
+int Yes2SDKSession::IsAudioEnabled(lua_State *L)
+{
+    int top = lua_gettop(L);
+    lua_pushboolean(L, Yes2SDK_session_isAudioEnabled());
+    assert(top + 1 == lua_gettop(L));
+    return 1;
+}
+
 #endif

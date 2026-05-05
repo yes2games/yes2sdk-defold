@@ -4,6 +4,20 @@ All notable changes to Yes2SDK for Defold will be documented in this file.
 
 Format follows [Keep a Changelog](https://keepachangelog.com/). Versioning follows [Semantic Versioning](https://semver.org/).
 
+## [1.4.0] - 2026-05-05
+
+YouTube Playables certification readiness. Surfaces four new public APIs that mirror the lifecycle and audio-state additions made on the Core SDK side. Required for any Defold game shipping to YouTube — without these, games cannot satisfy YouTube cert integration requirements #14, #21, and #22.
+
+### Added
+- **`M.on_pause(callback)`** — subscribe to platform pause events. Required by YouTube cert (integration #21: "MUST pause all execution after onPause"). Callback signature: `function(self)`.
+- **`M.on_resume(callback)`** — subscribe to platform resume events. Callback signature: `function(self)`.
+- **`M.on_audio_enabled_change(callback)`** — subscribe to platform mute/unmute. Required by YouTube cert (integration #14: "MUST use isAudioEnabled and onAudioEnabledChange"). Callback signature: `function(self, enabled)` where `enabled` is a boolean.
+- **`M.session_is_audio_enabled()`** — read current platform audio state. Required by YouTube cert (integration #14) so the game can set its initial mute state at startup. Returns `true` on platforms without a native signal (Poki, CrazyGames, Yandex, GameDistribution).
+
+### Notes
+- The lifecycle events fall back to `document.visibilitychange` for pause/resume on platforms without a native signal — so cross-platform pause works out of the box.
+- Subscribe to lifecycle events AFTER `M.initialize()`'s callback fires. Subscribing earlier logs a console warning and the subscription is dropped.
+
 ## [1.3.0] - 2026-04-29
 
 Round-1 integrator-feedback parity with Yes2SDK Unity v2.2.0. Additive — no breaking changes.

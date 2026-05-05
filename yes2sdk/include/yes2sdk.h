@@ -9,15 +9,27 @@ class Yes2SDK
 public:
     typedef void (*OnInitializeCallback)(const int success, const char* error);
     typedef void (*OnStartGameCallback)(const int success, const char* error);
+    // Lifecycle event callbacks — fire whenever the platform signals pause /
+    // resume / audio mute changes. Required for YouTube Playables certification
+    // (integration #14, #21, #22). The same callback is invoked on every event.
+    typedef void (*OnPauseCallback)();
+    typedef void (*OnResumeCallback)();
+    typedef void (*OnAudioEnabledChangeCallback)(const int enabled);
 
     static int InitializeAsync(lua_State* L);
     static int StartGameAsync(lua_State* L);
     static int SetLoadingProgress(lua_State* L);
     static int GetPlatform(lua_State* L);
+    static int OnPause(lua_State* L);
+    static int OnResume(lua_State* L);
+    static int OnAudioEnabledChange(lua_State* L);
 
 private:
     static void OnInitialize(const int success, const char* error);
     static void OnStartGame(const int success, const char* error);
+    static void OnPauseFromJs();
+    static void OnResumeFromJs();
+    static void OnAudioEnabledChangeFromJs(const int enabled);
 };
 
 extern "C"
@@ -26,6 +38,9 @@ extern "C"
     void Yes2SDK_startGameAsync(Yes2SDK::OnStartGameCallback callback);
     void Yes2SDK_setLoadingProgress(int progress);
     const char* Yes2SDK_getPlatform();
+    void Yes2SDK_onPause(Yes2SDK::OnPauseCallback callback);
+    void Yes2SDK_onResume(Yes2SDK::OnResumeCallback callback);
+    void Yes2SDK_onAudioEnabledChange(Yes2SDK::OnAudioEnabledChangeCallback callback);
 }
 
 #endif
