@@ -15,12 +15,17 @@
 #define EXTENSION_NAME Yes2SDK
 #define LIB_NAME "Yes2SDK"
 #define MODULE_NAME "yes2sdk"
-#define VERSION "1.3.0"
+#define VERSION "1.4.0"
 
 #if defined(DM_PLATFORM_HTML5)
 
 lua_Listener onInitializeListener;
 lua_Listener onStartGameListener;
+// Lifecycle listeners — registered once and reused on every event for the
+// lifetime of the game session (YouTube cert reqs #14, #21, #22).
+lua_Listener onPauseListener;
+lua_Listener onResumeListener;
+lua_Listener onAudioEnabledChangeListener;
 
 void Yes2SDK::OnInitialize(const int success, const char *error)
 {
@@ -103,12 +108,94 @@ int Yes2SDK::GetPlatform(lua_State *L)
     return 1;
 }
 
+// ── Lifecycle event handlers (called from JS bridge on every event) ──
+
+void Yes2SDK::OnPauseFromJs()
+{
+    lua_State *L = onPauseListener.m_L;
+    if (!L) return;
+    int top = lua_gettop(L);
+
+    lua_pushlistener(L, onPauseListener);
+    int ret = lua_pcall(L, 1, 0, 0);
+    if (ret != 0)
+    {
+        lua_pop(L, 1);
+    }
+
+    assert(top == lua_gettop(L));
+}
+
+void Yes2SDK::OnResumeFromJs()
+{
+    lua_State *L = onResumeListener.m_L;
+    if (!L) return;
+    int top = lua_gettop(L);
+
+    lua_pushlistener(L, onResumeListener);
+    int ret = lua_pcall(L, 1, 0, 0);
+    if (ret != 0)
+    {
+        lua_pop(L, 1);
+    }
+
+    assert(top == lua_gettop(L));
+}
+
+void Yes2SDK::OnAudioEnabledChangeFromJs(const int enabled)
+{
+    lua_State *L = onAudioEnabledChangeListener.m_L;
+    if (!L) return;
+    int top = lua_gettop(L);
+
+    lua_pushlistener(L, onAudioEnabledChangeListener);
+    lua_pushboolean(L, enabled);
+    int ret = lua_pcall(L, 2, 0, 0);
+    if (ret != 0)
+    {
+        lua_pop(L, 1);
+    }
+
+    assert(top == lua_gettop(L));
+}
+
+int Yes2SDK::OnPause(lua_State *L)
+{
+    int top = lua_gettop(L);
+    luaL_checklistener(L, 1, onPauseListener);
+    Yes2SDK_onPause(Yes2SDK::OnPauseFromJs);
+    assert(top == lua_gettop(L));
+    return 0;
+}
+
+int Yes2SDK::OnResume(lua_State *L)
+{
+    int top = lua_gettop(L);
+    luaL_checklistener(L, 1, onResumeListener);
+    Yes2SDK_onResume(Yes2SDK::OnResumeFromJs);
+    assert(top == lua_gettop(L));
+    return 0;
+}
+
+int Yes2SDK::OnAudioEnabledChange(lua_State *L)
+{
+    int top = lua_gettop(L);
+    luaL_checklistener(L, 1, onAudioEnabledChangeListener);
+    Yes2SDK_onAudioEnabledChange(Yes2SDK::OnAudioEnabledChangeFromJs);
+    assert(top == lua_gettop(L));
+    return 0;
+}
+
 static const luaL_reg Module_methods[] = {
     // Core
     {"initialize", Yes2SDK::InitializeAsync},
     {"start_game", Yes2SDK::StartGameAsync},
     {"set_loading_progress", Yes2SDK::SetLoadingProgress},
     {"get_platform", Yes2SDK::GetPlatform},
+    // Lifecycle events (YouTube cert reqs #14, #21, #22)
+    {"on_pause", Yes2SDK::OnPause},
+    {"on_resume", Yes2SDK::OnResume},
+    {"on_audio_enabled_change", Yes2SDK::OnAudioEnabledChange},
 
     // Ads
     {"ads_show_interstitial", Yes2SDKAds::ShowInterstitial},
@@ -119,6 +206,7 @@ static const luaL_reg Module_methods[] = {
     {"session_gameplay_start", Yes2SDKSession::GameplayStart},
     {"session_gameplay_stop", Yes2SDKSession::GameplayStop},
     {"session_get_locale", Yes2SDKSession::GetLocale},
+    {"session_is_audio_enabled", Yes2SDKSession::IsAudioEnabled},
 
     // Analytics
     {"analytics_log_level_start", Yes2SDKAnalytics::LogLevelStart},

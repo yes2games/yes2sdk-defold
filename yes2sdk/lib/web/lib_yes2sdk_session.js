@@ -22,6 +22,16 @@ var Yes2SDKSessionLib = {
             locale = navigator.language || "en";
         }
         return stringToUTF8OnStack(locale);
+    },
+
+    Yes2SDK_session_isAudioEnabled: function () {
+        try {
+            if (window.Yes2SDK && window.Yes2SDK.session && typeof window.Yes2SDK.session.isAudioEnabled === 'function') {
+                return window.Yes2SDK.session.isAudioEnabled() ? 1 : 0;
+            }
+        } catch (e) {}
+        // Default to enabled — game shouldn't start muted just because the SDK isn't ready yet.
+        return 1;
     }
 }
 

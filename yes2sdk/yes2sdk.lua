@@ -32,6 +32,7 @@ if not sdk then
   function sdk.banners_is_supported() warn() return false end
   function sdk.score_is_supported() warn() return false end
   function sdk.ads_is_rewarded_ad_available() warn() return false end
+  function sdk.session_is_audio_enabled() warn() return true end
 end
 
 -- True between any ads_show_* call and its after_ad / no_fill / dismissed completion.
@@ -56,6 +57,36 @@ end
 
 function M.get_platform()
   return sdk.get_platform()
+end
+
+-- ── Lifecycle events ──
+--
+-- YouTube Playables certification REQUIRES the game to honor pause / resume
+-- and audio mute state. Subscribe AFTER M.initialize() has called back —
+-- the underlying Yes2SDK.on(...) is only available once init resolves.
+--
+-- Each callback is invoked once per platform event for the lifetime of the
+-- session. Re-registering replaces the previous callback for that event.
+
+--- Subscribe to platform pause events.
+-- The game MUST stop its loop / audio / network calls when this fires.
+-- Callback signature: function(self)
+function M.on_pause(callback)
+  sdk.on_pause(callback)
+end
+
+--- Subscribe to platform resume events.
+-- The game may resume its loop. Resumption is not guaranteed.
+-- Callback signature: function(self)
+function M.on_resume(callback)
+  sdk.on_resume(callback)
+end
+
+--- Subscribe to platform audio mute/unmute changes.
+-- The game MUST update its audio state to match the platform.
+-- Callback signature: function(self, enabled) where enabled is a boolean.
+function M.on_audio_enabled_change(callback)
+  sdk.on_audio_enabled_change(callback)
 end
 
 -- ── Ads ──
@@ -124,6 +155,14 @@ end
 
 function M.session_get_locale()
   return sdk.session_get_locale()
+end
+
+--- Check whether platform audio is currently enabled.
+-- Required by YouTube cert: read this at startup to set the initial mute
+-- state, then subscribe to M.on_audio_enabled_change for updates.
+-- Platforms without a native audio-state signal return true.
+function M.session_is_audio_enabled()
+  return sdk.session_is_audio_enabled()
 end
 
 -- ── Analytics ──
