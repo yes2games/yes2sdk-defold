@@ -18,12 +18,12 @@ In your `game.project`, add:
 
 ```ini
 [project]
-dependencies#0 = https://github.com/yes2games/yes2sdk-defold/archive/refs/tags/v1.3.0.zip
+dependencies#0 = https://github.com/yes2games/yes2sdk-defold/archive/refs/tags/v1.4.0.zip
 ```
 
 Then in Defold Editor: **Project > Fetch Libraries**.
 
-> Pinning the URL with `tags/v1.3.0` keeps the resolved hash stable. Bump the tag (e.g. `tags/v1.4.0`) to upgrade. **Don't use `/refs/heads/main.zip`** — branch archives are served less reliably by GitHub and `Fetch Libraries` fails intermittently.
+> Pinning the URL with `tags/v1.4.0` keeps the resolved hash stable. Bump the tag when a newer release ships. **Don't use `/refs/heads/main.zip`** — branch archives are served less reliably by GitHub and `Fetch Libraries` fails intermittently.
 
 ### Via Local Copy
 
@@ -361,7 +361,7 @@ Use a tagged release URL, not a branch archive. GitHub serves tagged archives mo
 
 ```ini
 # Good — tagged release
-dependencies#0 = https://github.com/yes2games/yes2sdk-defold/archive/refs/tags/v1.3.0.zip
+dependencies#0 = https://github.com/yes2games/yes2sdk-defold/archive/refs/tags/v1.4.0.zip
 
 # Bad — branch archive (intermittent failures)
 dependencies#0 = https://github.com/yes2games/yes2sdk-defold/archive/refs/heads/main.zip
