@@ -383,21 +383,6 @@ If your project **does** use Exclude Resources (`game.project` → `liveupdate.e
 
 ---
 
-## Architecture
-
-```
-Lua API (yes2sdk.lua)  ->  C++ extension (src/, include/)  ->  .js bridge (lib/web/)  ->  window.Yes2SDK.*
-                                                                                               ^
-                                                                              injected by the Yes2Games Dashboard
-```
-
-- **Lua** (`yes2sdk.lua`) — high-level wrapper with a no-op stub for non-HTML5 builds.
-- **C++ extension** (`src/`, `include/`) — Lua ↔ JS glue via Defold's `dmsdk`. HTML5-only via `#if defined(DM_PLATFORM_HTML5)`.
-- **.jslib bridges** (`lib/web/`) — call `window.Yes2SDK.*` and dispatch results back through `makeDynCall`.
-- **HTML5 template** (`html5/engine_template.html`) — bare template; the dashboard injects the SuperSDK Core (`yes2sdk.umd.js`) at upload time.
-
----
-
 ## License
 
-MIT
+MIT — see [LICENSE](LICENSE).

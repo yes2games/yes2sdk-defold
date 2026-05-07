@@ -6,7 +6,7 @@ Format follows [Keep a Changelog](https://keepachangelog.com/). Versioning follo
 
 ## [1.4.0] - 2026-05-05
 
-YouTube Playables certification readiness. Surfaces four new public APIs that mirror the lifecycle and audio-state additions made on the Core SDK side. Required for any Defold game shipping to YouTube — without these, games cannot satisfy YouTube cert integration requirements #14, #21, and #22.
+YouTube Playables certification readiness. Surfaces four new public lifecycle and audio-state APIs. Required for any Defold game shipping to YouTube — without these, games cannot satisfy YouTube cert integration requirements #14, #21, and #22.
 
 ### Added
 - **`M.on_pause(callback)`** — subscribe to platform pause events. Required by YouTube cert (integration #21: "MUST pause all execution after onPause"). Callback signature: `function(self)`.
@@ -20,7 +20,7 @@ YouTube Playables certification readiness. Surfaces four new public APIs that mi
 
 ## [1.3.0] - 2026-04-29
 
-Round-1 integrator-feedback parity with Yes2SDK Unity v2.2.0. Additive — no breaking changes.
+Brings the Defold SDK to feature parity with Yes2SDK Unity v2.2.0. Additive — no breaking changes.
 
 ### Added
 - **Friends module** — new native extension files (`yes2sdk_friends.h`, `.cpp`, `lib_yes2sdk_friends.js`) exposing `friends_list_friends(page, size, callback)` and `friends_is_supported()`. Callback receives `(self, success, page_json)` where `page_json` is `{"friends":[{"username","id"}],"hasMore":bool}`.
@@ -41,7 +41,6 @@ Round-1 integrator-feedback parity with Yes2SDK Unity v2.2.0. Additive — no br
 - Build & Submit section trimmed; defers detailed flow to the dashboard upload UX.
 
 ### Notes
-- Requires the matching SuperSDK Core build live in the dashboard's `sdk-dist/` (yes2sdk-core round-4 / yes2Dashboard sync round-4 — already deployed).
 - Existing 3-arg callers of `analytics_log_level_end` keep working; the 4th arg defaults to `nil` (omitted).
 - The Lua wrapper's no-op stub adds the new `_is_supported` / `_is_rewarded_ad_available` functions returning `false` so editor builds don't error.
 
