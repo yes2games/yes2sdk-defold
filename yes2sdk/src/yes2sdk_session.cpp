@@ -43,4 +43,13 @@ int Yes2SDKSession::IsAudioEnabled(lua_State *L)
     return 1;
 }
 
+int Yes2SDKSession::GetDeviceInfo(lua_State *L)
+{
+    int top = lua_gettop(L);
+    const char *info = Yes2SDK_session_getDeviceInfo();
+    lua_pushstring(L, info ? info : "{\"type\":\"unknown\",\"isMobile\":false,\"isDesktop\":false,\"isTablet\":false,\"isTV\":false}");
+    assert(top + 1 == lua_gettop(L));
+    return 1;
+}
+
 #endif

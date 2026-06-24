@@ -9,6 +9,10 @@
 #include "yes2sdk_banners.h"
 #include "yes2sdk_score.h"
 #include "yes2sdk_friends.h"
+#include "yes2sdk_leaderboard.h"
+#include "yes2sdk_stats.h"
+#include "yes2sdk_config.h"
+#include "yes2sdk_review.h"
 #include "luautils.h"
 #include <dmsdk/sdk.h>
 
@@ -207,6 +211,7 @@ static const luaL_reg Module_methods[] = {
     {"session_gameplay_stop", Yes2SDKSession::GameplayStop},
     {"session_get_locale", Yes2SDKSession::GetLocale},
     {"session_is_audio_enabled", Yes2SDKSession::IsAudioEnabled},
+    {"session_get_device_info", Yes2SDKSession::GetDeviceInfo},
 
     // Analytics
     {"analytics_log_level_start", Yes2SDKAnalytics::LogLevelStart},
@@ -221,6 +226,11 @@ static const luaL_reg Module_methods[] = {
     {"player_get_id", Yes2SDKPlayer::GetId},
     {"player_get_data", Yes2SDKPlayer::GetData},
     {"player_set_data", Yes2SDKPlayer::SetData},
+    {"player_get_unique_id", Yes2SDKPlayer::GetUniqueId},
+    {"player_get_ids_per_game", Yes2SDKPlayer::GetIdsPerGame},
+    {"player_get_paying_status", Yes2SDKPlayer::GetPayingStatus},
+    {"player_get_mode", Yes2SDKPlayer::GetMode},
+    {"player_get_photo", Yes2SDKPlayer::GetPhoto},
 
     // Auth
     {"auth_is_authenticated", Yes2SDKAuth::IsAuthenticated},
@@ -242,12 +252,14 @@ static const luaL_reg Module_methods[] = {
     {"game_get_settings", Yes2SDKGame::GetSettings},
     {"game_copy_to_clipboard", Yes2SDKGame::CopyToClipboard},
     {"game_invite_link", Yes2SDKGame::InviteLink},
+    {"game_get_server_time", Yes2SDKGame::GetServerTime},
 
     // Banners
     {"banners_show", Yes2SDKBanners::Show},
     {"banners_hide", Yes2SDKBanners::Hide},
     {"banners_hide_all", Yes2SDKBanners::HideAll},
     {"banners_is_supported", Yes2SDKBanners::IsSupported},
+    {"banners_get_status", Yes2SDKBanners::GetStatus},
 
     // Score
     {"score_add", Yes2SDKScore::AddScore},
@@ -257,6 +269,28 @@ static const luaL_reg Module_methods[] = {
     // Friends
     {"friends_list_friends", Yes2SDKFriends::ListFriends},
     {"friends_is_supported", Yes2SDKFriends::IsSupported},
+
+    // Leaderboard
+    {"leaderboard_get", Yes2SDKLeaderboard::Get},
+    {"leaderboard_set_score", Yes2SDKLeaderboard::SetScore},
+    {"leaderboard_get_entries", Yes2SDKLeaderboard::GetEntries},
+    {"leaderboard_get_player_entry", Yes2SDKLeaderboard::GetPlayerEntry},
+    {"leaderboard_is_supported", Yes2SDKLeaderboard::IsSupported},
+
+    // Stats
+    {"stats_get", Yes2SDKStats::Get},
+    {"stats_set", Yes2SDKStats::Set},
+    {"stats_increment", Yes2SDKStats::Increment},
+    {"stats_is_supported", Yes2SDKStats::IsSupported},
+
+    // Config (remote flags)
+    {"config_get_flags", Yes2SDKConfig::GetFlags},
+    {"config_is_supported", Yes2SDKConfig::IsSupported},
+
+    // Review (rating prompt)
+    {"review_can_review", Yes2SDKReview::CanReview},
+    {"review_request_review", Yes2SDKReview::RequestReview},
+    {"review_is_supported", Yes2SDKReview::IsSupported},
 
     {0, 0}
 };

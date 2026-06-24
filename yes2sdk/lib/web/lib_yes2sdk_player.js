@@ -4,6 +4,11 @@ var Yes2SDKPlayerLib = {
         _getPlayerPtr: null,
         _getDataPtr: null,
         _setDataPtr: null,
+        _getUniqueIdPtr: null,
+        _getIdsPerGamePtr: null,
+        _getPayingStatusPtr: null,
+        _getModePtr: null,
+        _getPhotoPtr: null,
 
         allocateString: function (str) {
             return stringToUTF8OnStack(str);
@@ -74,6 +79,88 @@ var Yes2SDKPlayerLib = {
                 });
         } else {
             {{{ makeDynCall("vii", "Yes2SDKPlayerCallbacks._setDataPtr") }}}(0, Yes2SDKPlayerCallbacks.allocateString("SDK not initialized"));
+        }
+    },
+
+    Yes2SDK_player_getUniqueId: function (callback) {
+        Yes2SDKPlayerCallbacks._getUniqueIdPtr = callback;
+        if (window.Yes2SDK && window.Yes2SDK.player) {
+            window.Yes2SDK.player.getUniqueId()
+                .then(function (id) {
+                    {{{ makeDynCall("vii", "Yes2SDKPlayerCallbacks._getUniqueIdPtr") }}}(1, Yes2SDKPlayerCallbacks.allocateString(String(id == null ? "" : id)));
+                })
+                .catch(function (err) {
+                    var msg = typeof err === 'object' ? JSON.stringify(err) : String(err);
+                    {{{ makeDynCall("vii", "Yes2SDKPlayerCallbacks._getUniqueIdPtr") }}}(0, Yes2SDKPlayerCallbacks.allocateString(msg));
+                });
+        } else {
+            {{{ makeDynCall("vii", "Yes2SDKPlayerCallbacks._getUniqueIdPtr") }}}(0, Yes2SDKPlayerCallbacks.allocateString("SDK not initialized"));
+        }
+    },
+
+    Yes2SDK_player_getIdsPerGame: function (callback) {
+        Yes2SDKPlayerCallbacks._getIdsPerGamePtr = callback;
+        if (window.Yes2SDK && window.Yes2SDK.player) {
+            window.Yes2SDK.player.getIDsPerGame()
+                .then(function (ids) {
+                    {{{ makeDynCall("vii", "Yes2SDKPlayerCallbacks._getIdsPerGamePtr") }}}(1, Yes2SDKPlayerCallbacks.allocateString(JSON.stringify(ids || [])));
+                })
+                .catch(function (err) {
+                    var msg = typeof err === 'object' ? JSON.stringify(err) : String(err);
+                    {{{ makeDynCall("vii", "Yes2SDKPlayerCallbacks._getIdsPerGamePtr") }}}(0, Yes2SDKPlayerCallbacks.allocateString(msg));
+                });
+        } else {
+            {{{ makeDynCall("vii", "Yes2SDKPlayerCallbacks._getIdsPerGamePtr") }}}(0, Yes2SDKPlayerCallbacks.allocateString("SDK not initialized"));
+        }
+    },
+
+    Yes2SDK_player_getPayingStatus: function (callback) {
+        Yes2SDKPlayerCallbacks._getPayingStatusPtr = callback;
+        if (window.Yes2SDK && window.Yes2SDK.player) {
+            window.Yes2SDK.player.getPayingStatus()
+                .then(function (status) {
+                    {{{ makeDynCall("vii", "Yes2SDKPlayerCallbacks._getPayingStatusPtr") }}}(1, Yes2SDKPlayerCallbacks.allocateString(String(status == null ? "unknown" : status)));
+                })
+                .catch(function (err) {
+                    var msg = typeof err === 'object' ? JSON.stringify(err) : String(err);
+                    {{{ makeDynCall("vii", "Yes2SDKPlayerCallbacks._getPayingStatusPtr") }}}(0, Yes2SDKPlayerCallbacks.allocateString(msg));
+                });
+        } else {
+            {{{ makeDynCall("vii", "Yes2SDKPlayerCallbacks._getPayingStatusPtr") }}}(0, Yes2SDKPlayerCallbacks.allocateString("SDK not initialized"));
+        }
+    },
+
+    Yes2SDK_player_getMode: function (callback) {
+        Yes2SDKPlayerCallbacks._getModePtr = callback;
+        if (window.Yes2SDK && window.Yes2SDK.player) {
+            window.Yes2SDK.player.getMode()
+                .then(function (mode) {
+                    {{{ makeDynCall("vii", "Yes2SDKPlayerCallbacks._getModePtr") }}}(1, Yes2SDKPlayerCallbacks.allocateString(String(mode == null ? "unknown" : mode)));
+                })
+                .catch(function (err) {
+                    var msg = typeof err === 'object' ? JSON.stringify(err) : String(err);
+                    {{{ makeDynCall("vii", "Yes2SDKPlayerCallbacks._getModePtr") }}}(0, Yes2SDKPlayerCallbacks.allocateString(msg));
+                });
+        } else {
+            {{{ makeDynCall("vii", "Yes2SDKPlayerCallbacks._getModePtr") }}}(0, Yes2SDKPlayerCallbacks.allocateString("SDK not initialized"));
+        }
+    },
+
+    Yes2SDK_player_getPhoto: function (sizePtr, callback) {
+        Yes2SDKPlayerCallbacks._getPhotoPtr = callback;
+        var size = UTF8ToString(sizePtr);
+        if (window.Yes2SDK && window.Yes2SDK.player) {
+            window.Yes2SDK.player.getPhoto(size || undefined)
+                .then(function (url) {
+                    // url may be null when no photo is available — pass JSON "null".
+                    {{{ makeDynCall("vii", "Yes2SDKPlayerCallbacks._getPhotoPtr") }}}(1, Yes2SDKPlayerCallbacks.allocateString(JSON.stringify(url === undefined ? null : url)));
+                })
+                .catch(function (err) {
+                    var msg = typeof err === 'object' ? JSON.stringify(err) : String(err);
+                    {{{ makeDynCall("vii", "Yes2SDKPlayerCallbacks._getPhotoPtr") }}}(0, Yes2SDKPlayerCallbacks.allocateString(msg));
+                });
+        } else {
+            {{{ makeDynCall("vii", "Yes2SDKPlayerCallbacks._getPhotoPtr") }}}(0, Yes2SDKPlayerCallbacks.allocateString("SDK not initialized"));
         }
     }
 }

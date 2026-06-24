@@ -11,6 +11,7 @@ public:
     static int GameplayStop(lua_State* L);
     static int GetLocale(lua_State* L);
     static int IsAudioEnabled(lua_State* L);
+    static int GetDeviceInfo(lua_State* L);
 };
 
 extern "C"
@@ -19,6 +20,7 @@ extern "C"
     void Yes2SDK_session_gameplayStop();
     const char* Yes2SDK_session_getLocale();
     int Yes2SDK_session_isAudioEnabled();
+    const char* Yes2SDK_session_getDeviceInfo();
 }
 
 #endif

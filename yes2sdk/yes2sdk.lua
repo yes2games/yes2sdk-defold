@@ -20,6 +20,7 @@ if not sdk then
   -- Override functions that return values with sensible defaults
   function sdk.get_platform() warn() return "editor" end
   function sdk.session_get_locale() warn() return "en" end
+  function sdk.session_get_device_info() warn() return '{"type":"unknown","isMobile":false,"isDesktop":false,"isTablet":false,"isTV":false}' end
   function sdk.auth_is_authenticated() warn() return false end
   function sdk.player_get_name() warn() return "Player" end
   function sdk.player_get_id() warn() return "" end
@@ -31,6 +32,10 @@ if not sdk then
   function sdk.friends_is_supported() warn() return false end
   function sdk.banners_is_supported() warn() return false end
   function sdk.score_is_supported() warn() return false end
+  function sdk.leaderboard_is_supported() warn() return false end
+  function sdk.stats_is_supported() warn() return false end
+  function sdk.config_is_supported() warn() return false end
+  function sdk.review_is_supported() warn() return false end
   function sdk.ads_is_rewarded_ad_available() warn() return false end
   function sdk.session_is_audio_enabled() warn() return true end
 end
@@ -165,6 +170,15 @@ function M.session_is_audio_enabled()
   return sdk.session_is_audio_enabled()
 end
 
+--- Get device info synchronously as a JSON string.
+-- Returns a JSON string of the form
+-- '{"type":"...","isMobile":bool,"isDesktop":bool,"isTablet":bool,"isTV":bool}'.
+-- Decode it with json.decode(...). Returns an unknown/all-false shape when the
+-- platform does not expose device info.
+function M.session_get_device_info()
+  return sdk.session_get_device_info()
+end
+
 -- ── Analytics ──
 
 function M.analytics_log_level_start(level)
@@ -213,6 +227,42 @@ end
 
 function M.player_set_data(data_json, callback)
   sdk.player_set_data(data_json, callback)
+end
+
+--- Get the player's permanent unique identifier.
+-- Callback signature: function(self, success, id) where id is a string
+-- ("anonymous" on platforms that cannot identify the player).
+function M.player_get_unique_id(callback)
+  sdk.player_get_unique_id(callback)
+end
+
+--- Get the player's identity across the developer's other games on this platform.
+-- Callback signature: function(self, success, ids_json) where ids_json is a JSON
+-- array string of the form '[{"appId":"...","userId":"..."},...]' (empty array when unsupported).
+function M.player_get_ids_per_game(callback)
+  sdk.player_get_ids_per_game(callback)
+end
+
+--- Get the player's monetization / paying status.
+-- Callback signature: function(self, success, status) where status is a string
+-- ("unknown" on platforms that do not expose one).
+function M.player_get_paying_status(callback)
+  sdk.player_get_paying_status(callback)
+end
+
+--- Get the player's session / authorization mode.
+-- Callback signature: function(self, success, mode) where mode is a string
+-- ("lite", "authorized", or "unknown").
+function M.player_get_mode(callback)
+  sdk.player_get_mode(callback)
+end
+
+--- Get the player's profile photo URL at the requested size.
+-- @param size Desired photo size string (e.g. "small", "medium", "large").
+-- Callback signature: function(self, success, photo_json) where photo_json is a JSON
+-- string of the URL, or the literal "null" when no photo is available.
+function M.player_get_photo(size, callback)
+  sdk.player_get_photo(size, callback)
 end
 
 -- ── Auth ──
@@ -281,6 +331,21 @@ function M.game_invite_link(params_json, callback)
   sdk.game_invite_link(params_json, callback)
 end
 
+--- Get the authoritative server time.
+-- The bridge delivers the time as a numeric string; this wrapper converts it
+-- to a number before invoking the callback.
+-- Callback signature: function(self, success, time) where time is a number on
+-- success (or the original error string when success is false).
+function M.game_get_server_time(callback)
+  sdk.game_get_server_time(function(self, success, value)
+    if success then
+      callback(self, true, tonumber(value))
+    else
+      callback(self, false, value)
+    end
+  end)
+end
+
 -- ── Banners ──
 
 function M.banners_show(id, size)
@@ -298,6 +363,13 @@ end
 --- Check whether banners are supported on the current platform.
 function M.banners_is_supported()
   return sdk.banners_is_supported()
+end
+
+--- Get the current banner status.
+-- Callback signature: function(self, success, status_json) where status_json is a JSON
+-- string of the form '{"isShowing":true,"reason":"..."}' (reason optional).
+function M.banners_get_status(callback)
+  sdk.banners_get_status(callback)
 end
 
 -- ── Score ──
@@ -327,6 +399,109 @@ end
 --- Check whether friends is supported on the current platform.
 function M.friends_is_supported()
   return sdk.friends_is_supported()
+end
+
+-- ── Leaderboard ──
+
+--- Get a leaderboard by name.
+-- Callback signature: function(self, success, leaderboard_json) where leaderboard_json
+-- is a JSON string of the form '{"name":"...","contextId":"...","entries":[...]}'.
+function M.leaderboard_get(name, callback)
+  sdk.leaderboard_get(name, callback)
+end
+
+--- Submit a score to a leaderboard.
+-- @param metadata Optional metadata string. Pass nil/missing to omit.
+-- Callback signature: function(self, success, entry_json) where entry_json is a JSON
+-- string of the player's resulting LeaderboardEntry.
+function M.leaderboard_set_score(name, score, metadata, callback)
+  sdk.leaderboard_set_score(name, score, metadata, callback)
+end
+
+--- Get leaderboard entries with pagination.
+-- Callback signature: function(self, success, entries_json) where entries_json is a JSON
+-- array of LeaderboardEntry objects.
+function M.leaderboard_get_entries(name, count, offset, callback)
+  sdk.leaderboard_get_entries(name, count, offset, callback)
+end
+
+--- Get the current player's leaderboard entry.
+-- Callback signature: function(self, success, entry_json) where entry_json is a JSON
+-- string of the player's LeaderboardEntry, or the literal "null" when the player is not ranked.
+function M.leaderboard_get_player_entry(name, callback)
+  sdk.leaderboard_get_player_entry(name, callback)
+end
+
+--- Check whether leaderboards are supported on the current platform.
+function M.leaderboard_is_supported()
+  return sdk.leaderboard_is_supported()
+end
+
+-- ── Stats ──
+
+--- Get stats by keys.
+-- @param keys_json JSON array string of stat keys, e.g. '["kills","deaths"]'.
+-- Callback signature: function(self, success, stats_json) where stats_json is a JSON
+-- object mapping stat name to number.
+function M.stats_get(keys_json, callback)
+  sdk.stats_get(keys_json, callback)
+end
+
+--- Set stats.
+-- @param stats_json JSON object string mapping stat name to number, e.g. '{"kills":10}'.
+-- Callback signature: function(self, success, error) where error is nil on success.
+function M.stats_set(stats_json, callback)
+  sdk.stats_set(stats_json, callback)
+end
+
+--- Increment stats.
+-- @param increments_json JSON object string mapping stat name to delta, e.g. '{"kills":1}'.
+-- Callback signature: function(self, success, stats_json) where stats_json is a JSON
+-- object of the updated stat values.
+function M.stats_increment(increments_json, callback)
+  sdk.stats_increment(increments_json, callback)
+end
+
+--- Check whether stats are supported on the current platform.
+function M.stats_is_supported()
+  return sdk.stats_is_supported()
+end
+
+-- ── Config (remote flags) ──
+
+--- Fetch remote feature flags.
+-- @param options_json JSON object string of options, e.g. '{"defaults":{...},"clientFeatures":{...}}'.
+--   Pass "{}" (or any value) when no options are needed; invalid JSON falls back to no options.
+-- Callback signature: function(self, success, flags_json) where flags_json is a JSON
+-- object mapping flag name to string value.
+function M.config_get_flags(options_json, callback)
+  sdk.config_get_flags(options_json, callback)
+end
+
+--- Check whether remote configuration is supported on the current platform.
+function M.config_is_supported()
+  return sdk.config_is_supported()
+end
+
+-- ── Review (rating prompt) ──
+
+--- Check whether the player can currently be shown the rating prompt.
+-- Callback signature: function(self, success, eligibility_json) where eligibility_json
+-- is a JSON object of the form '{"canReview":true,"reason":"..."}' (reason optional).
+function M.review_can_review(callback)
+  sdk.review_can_review(callback)
+end
+
+--- Request the in-game rating / feedback prompt.
+-- Callback signature: function(self, success, result_json) where result_json is a JSON
+-- object of the form '{"feedbackSent":true}'.
+function M.review_request_review(callback)
+  sdk.review_request_review(callback)
+end
+
+--- Check whether the rating prompt is supported on the current platform.
+function M.review_is_supported()
+  return sdk.review_is_supported()
 end
 
 return M

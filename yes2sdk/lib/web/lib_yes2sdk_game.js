@@ -50,6 +50,21 @@ var Yes2SDKGameLib = {
         } else {
             {{{ makeDynCall("vii", "callback") }}}(0, Yes2SDKGameUtils.allocateString("SDK not initialized"));
         }
+    },
+
+    Yes2SDK_game_getServerTime: function (callback) {
+        if (window.Yes2SDK && window.Yes2SDK.game) {
+            window.Yes2SDK.game.getServerTimeAsync()
+                .then(function (time) {
+                    // Delivered as a numeric string; the Lua wrapper tonumber()s it.
+                    {{{ makeDynCall("vii", "callback") }}}(1, Yes2SDKGameUtils.allocateString(String(time == null ? 0 : time)));
+                })
+                .catch(function (err) {
+                    {{{ makeDynCall("vii", "callback") }}}(0, Yes2SDKGameUtils.allocateString(typeof err === 'object' ? JSON.stringify(err) : String(err)));
+                });
+        } else {
+            {{{ makeDynCall("vii", "callback") }}}(0, Yes2SDKGameUtils.allocateString("SDK not initialized"));
+        }
     }
 }
 

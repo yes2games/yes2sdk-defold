@@ -1,5 +1,13 @@
 var Yes2SDKBannersLib = {
 
+    $Yes2SDKBannersCallbacks: {
+        _getStatusPtr: null,
+
+        allocateString: function (str) {
+            return stringToUTF8OnStack(str);
+        }
+    },
+
     Yes2SDK_banners_show: function (idPtr, sizePtr) {
         try {
             if (window.Yes2SDK && window.Yes2SDK.banners) {
@@ -31,7 +39,24 @@ var Yes2SDKBannersLib = {
             }
         } catch (e) {}
         return 0;
+    },
+
+    Yes2SDK_banners_getStatus: function (callback) {
+        Yes2SDKBannersCallbacks._getStatusPtr = callback;
+        if (window.Yes2SDK && window.Yes2SDK.banners) {
+            window.Yes2SDK.banners.getBannerStatusAsync()
+                .then(function (status) {
+                    {{{ makeDynCall("vii", "Yes2SDKBannersCallbacks._getStatusPtr") }}}(1, Yes2SDKBannersCallbacks.allocateString(JSON.stringify(status || {})));
+                })
+                .catch(function (err) {
+                    var msg = typeof err === 'object' ? JSON.stringify(err) : String(err);
+                    {{{ makeDynCall("vii", "Yes2SDKBannersCallbacks._getStatusPtr") }}}(0, Yes2SDKBannersCallbacks.allocateString(msg));
+                });
+        } else {
+            {{{ makeDynCall("vii", "Yes2SDKBannersCallbacks._getStatusPtr") }}}(0, Yes2SDKBannersCallbacks.allocateString("SDK not initialized"));
+        }
     }
 }
 
+autoAddDeps(Yes2SDKBannersLib, '$Yes2SDKBannersCallbacks');
 addToLibrary(Yes2SDKBannersLib);

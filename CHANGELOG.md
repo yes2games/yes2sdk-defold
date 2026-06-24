@@ -4,6 +4,20 @@ All notable changes to Yes2SDK for Defold will be documented in this file.
 
 Format follows [Keep a Changelog](https://keepachangelog.com/). Versioning follows [Semantic Versioning](https://semver.org/).
 
+## [1.5.0] - 2026-06-24
+
+Yandex feature parity. Adds leaderboards, player stats, remote config, and a rating prompt, plus richer player/session APIs. Functional on Yandex; other platforms report availability via `*_is_supported()` and degrade gracefully.
+
+### Added
+- **Leaderboards** — `M.leaderboard_get`, `M.leaderboard_set_score`, `M.leaderboard_get_entries`, `M.leaderboard_get_player_entry`, `M.leaderboard_is_supported`. Async results are delivered to the callback as a JSON string.
+- **Player stats** — `M.stats_get`, `M.stats_set`, `M.stats_increment`, `M.stats_is_supported` for server-side numeric counters. Map arguments are passed as JSON strings.
+- **Remote config** — `M.config_get_flags(options_json, callback)` fetches platform feature flags (JSON map); returns your provided defaults on platforms without remote config. `M.config_is_supported`.
+- **Rating prompt** — `M.review_can_review(callback)` and `M.review_request_review(callback)` show the platform's in-game rating prompt. `M.review_is_supported`.
+- **Player identity** — `M.player_get_unique_id`, `M.player_get_ids_per_game`, `M.player_get_paying_status`, `M.player_get_mode`, `M.player_get_photo(size, callback)`.
+- **`M.banners_get_status(callback)`** — whether a sticky banner is currently showing.
+- **`M.game_get_server_time(callback)`** — tamper-proof server time where available (callback receives a number), local time otherwise.
+- **`M.session_get_device_info()`** — synchronous; returns a JSON string with device type and form-factor flags (mobile / desktop / tablet / TV).
+
 ## [1.4.0] - 2026-05-05
 
 YouTube Playables certification readiness. Surfaces four new public lifecycle and audio-state APIs. Required for any Defold game shipping to YouTube — without these, games cannot satisfy YouTube cert integration requirements #14, #21, and #22.
