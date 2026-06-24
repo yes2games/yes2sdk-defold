@@ -129,7 +129,7 @@ int Yes2SDKPlayer::GetMode(lua_State* L) {
     return 0;
 }
 int Yes2SDKPlayer::GetPhoto(lua_State* L) {
-    const char* size = luaL_checkstring(L, 1);
+    const char* size = luaL_optstring(L, 1, "medium");
     luaL_checklistener(L, 2, onGetPhotoListener);
     Yes2SDK_player_getPhoto(size, Yes2SDKPlayer::OnGetPhoto);
     return 0;
