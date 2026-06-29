@@ -1,6 +1,12 @@
 --- Yes2SDK — High-level Lua API wrapper
 -- @module yes2sdk_api
 
+-- Async/callback APIs (player_get_*, leaderboard_*, stats_*, config_get_flags,
+-- review_*, banners_get_status, game_get_server_time, game_invite_link, auth_sign_in)
+-- track ONE in-flight request per function. Calling the same function again before its
+-- callback fires drops the earlier callback — only the latest one runs. Wait for the
+-- callback (or gate on your own flag) before re-invoking the same call.
+
 -- Guard: if the native extension isn't loaded (Project > Build instead of Bundle),
 -- create a stub that logs a warning and no-ops all SDK calls.
 local sdk = yes2sdk
