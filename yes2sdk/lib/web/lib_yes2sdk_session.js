@@ -32,6 +32,24 @@ var Yes2SDKSessionLib = {
         } catch (e) {}
         // Default to enabled — game shouldn't start muted just because the SDK isn't ready yet.
         return 1;
+    },
+
+    Yes2SDK_session_getDeviceInfo: function () {
+        try {
+            if (window.Yes2SDK && window.Yes2SDK.session && typeof window.Yes2SDK.session.getDeviceInfo === 'function') {
+                var info = window.Yes2SDK.session.getDeviceInfo() || {};
+                return stringToUTF8OnStack(JSON.stringify({
+                    type: info.type || "unknown",
+                    isMobile: !!info.isMobile,
+                    isDesktop: !!info.isDesktop,
+                    isTablet: !!info.isTablet,
+                    isTV: !!info.isTV
+                }));
+            }
+        } catch (e) {}
+        return stringToUTF8OnStack(JSON.stringify({
+            type: "unknown", isMobile: false, isDesktop: false, isTablet: false, isTV: false
+        }));
     }
 }
 

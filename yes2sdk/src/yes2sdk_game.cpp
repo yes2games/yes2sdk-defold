@@ -2,6 +2,7 @@
 #include "luautils.h"
 #if defined(DM_PLATFORM_HTML5)
 lua_Listener onInviteLinkListener;
+lua_Listener onGetServerTimeListener;
 
 void Yes2SDKGame::OnInviteLink(const int success, const char* result) {
     lua_State* L = onInviteLinkListener.m_L;
@@ -32,6 +33,22 @@ int Yes2SDKGame::InviteLink(lua_State* L) {
     const char* paramsJson = luaL_checkstring(L, 1);
     luaL_checklistener(L, 2, onInviteLinkListener);
     Yes2SDK_game_inviteLink(paramsJson, Yes2SDKGame::OnInviteLink);
+    return 0;
+}
+void Yes2SDKGame::OnGetServerTime(const int success, const char* result) {
+    lua_State* L = onGetServerTimeListener.m_L;
+    if (!L) return;
+    int top = lua_gettop(L);
+    lua_pushlistener(L, onGetServerTimeListener);
+    lua_pushboolean(L, success);
+    if (result) { lua_pushstring(L, result); } else { lua_pushnil(L); }
+    int ret = lua_pcall(L, 3, 0, 0);
+    if (ret != 0) { lua_pop(L, 1); }
+    assert(top == lua_gettop(L));
+}
+int Yes2SDKGame::GetServerTime(lua_State* L) {
+    luaL_checklistener(L, 1, onGetServerTimeListener);
+    Yes2SDK_game_getServerTime(Yes2SDKGame::OnGetServerTime);
     return 0;
 }
 #endif
