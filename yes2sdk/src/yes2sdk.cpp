@@ -13,13 +13,14 @@
 #include "yes2sdk_stats.h"
 #include "yes2sdk_config.h"
 #include "yes2sdk_review.h"
+#include "yes2sdk_iap.h"
 #include "luautils.h"
 #include <dmsdk/sdk.h>
 
 #define EXTENSION_NAME Yes2SDK
 #define LIB_NAME "Yes2SDK"
 #define MODULE_NAME "yes2sdk"
-#define VERSION "1.5.0"
+#define VERSION "1.5.1"
 
 #if defined(DM_PLATFORM_HTML5)
 
@@ -231,6 +232,7 @@ static const luaL_reg Module_methods[] = {
     {"player_get_paying_status", Yes2SDKPlayer::GetPayingStatus},
     {"player_get_mode", Yes2SDKPlayer::GetMode},
     {"player_get_photo", Yes2SDKPlayer::GetPhoto},
+    {"player_get_signed_info", Yes2SDKPlayer::GetSignedInfo},
 
     // Auth
     {"auth_is_authenticated", Yes2SDKAuth::IsAuthenticated},
@@ -291,6 +293,14 @@ static const luaL_reg Module_methods[] = {
     {"review_can_review", Yes2SDKReview::CanReview},
     {"review_request_review", Yes2SDKReview::RequestReview},
     {"review_is_supported", Yes2SDKReview::IsSupported},
+
+    // IAP (in-app purchases)
+    {"iap_get_catalog", Yes2SDKIap::GetCatalog},
+    {"iap_get_product", Yes2SDKIap::GetProduct},
+    {"iap_purchase", Yes2SDKIap::Purchase},
+    {"iap_get_purchases", Yes2SDKIap::GetPurchases},
+    {"iap_consume_purchase", Yes2SDKIap::ConsumePurchase},
+    {"iap_is_supported", Yes2SDKIap::IsSupported},
 
     {0, 0}
 };
