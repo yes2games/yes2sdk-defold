@@ -4,6 +4,14 @@ All notable changes to Yes2SDK for Defold will be documented in this file.
 
 Format follows [Keep a Changelog](https://keepachangelog.com/). Versioning follows [Semantic Versioning](https://semver.org/).
 
+## [1.5.1] - 2026-06-29
+
+Adds in-app purchases and signed player identity, completing parity for studios shipping a shop with consumable purchases on Yandex. Functional on platforms that expose a store; others report availability via `iap_is_supported()` and degrade gracefully.
+
+### Added
+- **In-app purchases** — `iap_get_catalog`, `iap_get_product`, `iap_purchase`, `iap_get_purchases`, `iap_consume_purchase`, `iap_is_supported`. Async results are delivered to the callback as JSON strings; verify purchases server-side.
+- **`player_get_signed_info(payload, callback)`** — a cryptographically signed `{playerId, signature}` snapshot for server-side verification of purchases and identity.
+
 ## [1.5.0] - 2026-06-29
 
 Yandex feature parity. Adds leaderboards, player stats, remote config, and a rating prompt, plus richer player/session APIs. Functional on Yandex; other platforms report availability via `*_is_supported()` and degrade gracefully.

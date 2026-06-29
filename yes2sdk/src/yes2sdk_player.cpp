@@ -8,6 +8,7 @@ lua_Listener onGetIdsPerGameListener;
 lua_Listener onGetPayingStatusListener;
 lua_Listener onGetModeListener;
 lua_Listener onGetPhotoListener;
+lua_Listener onGetSignedInfoListener;
 
 void Yes2SDKPlayer::OnGetData(const int success, const char* data) {
     lua_State* L = onGetDataListener.m_L;
@@ -132,6 +133,24 @@ int Yes2SDKPlayer::GetPhoto(lua_State* L) {
     const char* size = luaL_optstring(L, 1, "medium");
     luaL_checklistener(L, 2, onGetPhotoListener);
     Yes2SDK_player_getPhoto(size, Yes2SDKPlayer::OnGetPhoto);
+    return 0;
+}
+void Yes2SDKPlayer::OnGetSignedInfo(const int success, const char* result) {
+    lua_State* L = onGetSignedInfoListener.m_L;
+    if (!L) return;
+    int top = lua_gettop(L);
+    lua_pushlistener(L, onGetSignedInfoListener);
+    lua_pushboolean(L, success);
+    if (result) { lua_pushstring(L, result); } else { lua_pushnil(L); }
+    int ret = lua_pcall(L, 3, 0, 0);
+    if (ret != 0) { lua_pop(L, 1); }
+    assert(top == lua_gettop(L));
+}
+int Yes2SDKPlayer::GetSignedInfo(lua_State* L) {
+    // payload is optional — accept a string or nil/none.
+    const char* payload = luaL_optstring(L, 1, "");
+    luaL_checklistener(L, 2, onGetSignedInfoListener);
+    Yes2SDK_player_getSignedInfo(payload, Yes2SDKPlayer::OnGetSignedInfo);
     return 0;
 }
 #endif

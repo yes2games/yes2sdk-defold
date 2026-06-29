@@ -13,6 +13,7 @@ public:
     static int GetPayingStatus(lua_State* L);
     static int GetMode(lua_State* L);
     static int GetPhoto(lua_State* L);
+    static int GetSignedInfo(lua_State* L);
 private:
     static void OnGetData(const int success, const char* data);
     static void OnSetData(const int success, const char* error);
@@ -21,6 +22,7 @@ private:
     static void OnGetPayingStatus(const int success, const char* result);
     static void OnGetMode(const int success, const char* result);
     static void OnGetPhoto(const int success, const char* result);
+    static void OnGetSignedInfo(const int success, const char* result);
 };
 extern "C" {
     const char* Yes2SDK_player_getName();
@@ -32,5 +34,6 @@ extern "C" {
     void Yes2SDK_player_getPayingStatus(Yes2SDKPlayer::OnDataCallback callback);
     void Yes2SDK_player_getMode(Yes2SDKPlayer::OnDataCallback callback);
     void Yes2SDK_player_getPhoto(const char* size, Yes2SDKPlayer::OnDataCallback callback);
+    void Yes2SDK_player_getSignedInfo(const char* payload, Yes2SDKPlayer::OnDataCallback callback);
 }
 #endif
