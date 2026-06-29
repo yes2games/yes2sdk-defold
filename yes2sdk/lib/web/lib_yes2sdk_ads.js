@@ -66,14 +66,19 @@ var Yes2SDKAdsLib = {
         Yes2SDKAdsCallbacks._noFillPtr = noFill;
 
         if (window.Yes2SDK && window.Yes2SDK.ads) {
-            window.Yes2SDK.ads.showInterstitial(
-                UTF8ToString(placementPtr),
-                {
-                    beforeAd: Yes2SDKAdsCallbacks.beforeAd,
-                    afterAd: Yes2SDKAdsCallbacks.afterAd,
-                    noFill: Yes2SDKAdsCallbacks.noFill
-                }
-            );
+            try {
+                window.Yes2SDK.ads.showInterstitial(
+                    UTF8ToString(placementPtr),
+                    {
+                        beforeAd: Yes2SDKAdsCallbacks.beforeAd,
+                        afterAd: Yes2SDKAdsCallbacks.afterAd,
+                        noFill: Yes2SDKAdsCallbacks.noFill
+                    }
+                );
+            } catch (e) {
+                console.error("[Yes2SDK] showInterstitial threw:", e);
+                Yes2SDKAdsCallbacks.noFill();
+            }
         } else {
             Yes2SDKAdsCallbacks.noFill();
         }
@@ -87,16 +92,21 @@ var Yes2SDKAdsLib = {
         Yes2SDKAdsCallbacks._noFillPtr = noFill;
 
         if (window.Yes2SDK && window.Yes2SDK.ads) {
-            window.Yes2SDK.ads.showRewarded(
-                UTF8ToString(placementPtr),
-                {
-                    beforeAd: Yes2SDKAdsCallbacks.beforeAd,
-                    afterAd: Yes2SDKAdsCallbacks.afterAd,
-                    adDismissed: Yes2SDKAdsCallbacks.adDismissed,
-                    adViewed: Yes2SDKAdsCallbacks.adViewed,
-                    noFill: Yes2SDKAdsCallbacks.noFill
-                }
-            );
+            try {
+                window.Yes2SDK.ads.showRewarded(
+                    UTF8ToString(placementPtr),
+                    {
+                        beforeAd: Yes2SDKAdsCallbacks.beforeAd,
+                        afterAd: Yes2SDKAdsCallbacks.afterAd,
+                        adDismissed: Yes2SDKAdsCallbacks.adDismissed,
+                        adViewed: Yes2SDKAdsCallbacks.adViewed,
+                        noFill: Yes2SDKAdsCallbacks.noFill
+                    }
+                );
+            } catch (e) {
+                console.error("[Yes2SDK] showRewarded threw:", e);
+                Yes2SDKAdsCallbacks.noFill();
+            }
         } else {
             Yes2SDKAdsCallbacks.noFill();
         }

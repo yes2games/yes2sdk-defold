@@ -39,6 +39,19 @@ end
 -- Used to reject concurrent ad calls and exposed via M.ads_is_ad_showing().
 local _ad_in_flight = false
 
+-- Identity of the in-flight ad request. Each ads_show_* call mints a fresh token;
+-- every clear path (real completion, native-call failure, watchdog) is gated on it,
+-- so a stale watchdog can't clobber a newer request and no_fill never double-fires.
+local _active_request = nil
+
+-- Handle of the active watchdog timer, cancelled the moment the ad settles.
+local _ad_watchdog = nil
+
+-- Seconds before a non-settling ad (platform accepted the show but never called back)
+-- is force-cleared so the session can show ads again. Long enough not to kill a slow
+-- but real ad, short enough to recover. Keep consistent with unity #65.
+local _AD_TIMEOUT = 30
+
 local M = {}
 
 -- ── Core (mandatory) ──
@@ -91,11 +104,41 @@ end
 
 -- ── Ads ──
 
-local function _wrap_ad_completion(cb)
-  -- Wrap a completion callback so it clears the in-flight flag before delegating.
+local function _clear_ad(request)
+  -- Settle the given ad request exactly once. Returns true only for the request that
+  -- currently owns the latch; every later caller (stale completion, fired watchdog,
+  -- native-call failure) gets false and must no-op, so no_fill can't fire twice and a
+  -- late real callback can't reopen a settled (or already superseded) request.
+  if request == nil or request ~= _active_request then
+    return false
+  end
+  if _ad_watchdog then
+    timer.cancel(_ad_watchdog)
+  end
+  _ad_watchdog = nil
+  _active_request = nil
+  _ad_in_flight = false
+  return true
+end
+
+local function _start_ad_watchdog(request, no_fill)
+  -- Recover the latch if the platform accepts the show but never settles it.
+  _ad_watchdog = timer.delay(_AD_TIMEOUT, false, function()
+    _ad_watchdog = nil  -- timer auto-completed (repeat=false); don't cancel it in _clear_ad
+    if _clear_ad(request) then
+      print("[Yes2SDK] ad watchdog fired after " .. tostring(_AD_TIMEOUT) .. "s with no completion — clearing in-flight latch and reporting no_fill.")
+      if no_fill then no_fill() end
+    end
+  end)
+end
+
+local function _wrap_ad_completion(request, cb)
+  -- Wrap a completion callback so it settles the request before delegating. A stale
+  -- callback (its request already settled by the watchdog or superseded) is swallowed.
   return function(...)
-    _ad_in_flight = false
-    if cb then cb(...) end
+    if _clear_ad(request) then
+      if cb then cb(...) end
+    end
   end
 end
 
@@ -109,8 +152,21 @@ function M.ads_show_interstitial(placement, before_ad, after_ad, no_fill)
     if no_fill then no_fill() end
     return
   end
+  local request = {}
+  _active_request = request
   _ad_in_flight = true
-  sdk.ads_show_interstitial(placement, before_ad, _wrap_ad_completion(after_ad), _wrap_ad_completion(no_fill))
+  _start_ad_watchdog(request, no_fill)
+  local ok, err = pcall(
+    sdk.ads_show_interstitial,
+    placement,
+    before_ad,
+    _wrap_ad_completion(request, after_ad),
+    _wrap_ad_completion(request, no_fill)
+  )
+  if not ok and _clear_ad(request) then
+    print("[Yes2SDK] ads_show_interstitial native call failed: " .. tostring(err) .. " — reporting no_fill.")
+    if no_fill then no_fill() end
+  end
 end
 
 function M.ads_show_rewarded(placement, before_ad, after_ad, ad_dismissed, ad_viewed, no_fill)
@@ -119,15 +175,23 @@ function M.ads_show_rewarded(placement, before_ad, after_ad, ad_dismissed, ad_vi
     if no_fill then no_fill() end
     return
   end
+  local request = {}
+  _active_request = request
   _ad_in_flight = true
-  sdk.ads_show_rewarded(
+  _start_ad_watchdog(request, no_fill)
+  local ok, err = pcall(
+    sdk.ads_show_rewarded,
     placement,
     before_ad,
-    _wrap_ad_completion(after_ad),
-    _wrap_ad_completion(ad_dismissed),
+    _wrap_ad_completion(request, after_ad),
+    _wrap_ad_completion(request, ad_dismissed),
     ad_viewed,                              -- adViewed fires before afterAd; don't clear flag here
-    _wrap_ad_completion(no_fill)
+    _wrap_ad_completion(request, no_fill)
   )
+  if not ok and _clear_ad(request) then
+    print("[Yes2SDK] ads_show_rewarded native call failed: " .. tostring(err) .. " — reporting no_fill.")
+    if no_fill then no_fill() end
+  end
 end
 
 --- Returns true while ads_show_interstitial / ads_show_rewarded is in flight.
