@@ -4,7 +4,7 @@ All notable changes to Yes2SDK for Defold will be documented in this file.
 
 Format follows [Keep a Changelog](https://keepachangelog.com/). Versioning follows [Semantic Versioning](https://semver.org/).
 
-## [1.5.0] - 2026-06-24
+## [1.5.0] - 2026-06-29
 
 Yandex feature parity. Adds leaderboards, player stats, remote config, and a rating prompt, plus richer player/session APIs. Functional on Yandex; other platforms report availability via `*_is_supported()` and degrade gracefully.
 
@@ -17,6 +17,9 @@ Yandex feature parity. Adds leaderboards, player stats, remote config, and a rat
 - **`M.banners_get_status(callback)`** — whether a sticky banner is currently showing.
 - **`M.game_get_server_time(callback)`** — tamper-proof server time where available (callback receives a number), local time otherwise.
 - **`M.session_get_device_info()`** — synchronous; returns a JSON string with device type and form-factor flags (mobile / desktop / tablet / TV).
+
+### Fixed
+- Async bridge calls now route a synchronous failure (a platform method that throws instead of rejecting) to the callback's error path, so the Lua callback always fires instead of hanging.
 
 ## [1.4.0] - 2026-05-05
 

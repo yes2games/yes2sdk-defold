@@ -20,15 +20,20 @@ var Yes2SDKStatsLib = {
         }
 
         if (window.Yes2SDK && window.Yes2SDK.stats) {
-            window.Yes2SDK.stats.getStatsAsync(keys)
-                .then(function (result) {
-                    var json = JSON.stringify(result || {});
-                    {{{ makeDynCall("vii", "Yes2SDKStatsCallbacks._getPtr") }}}(1, Yes2SDKStatsCallbacks.allocateString(json));
-                })
-                .catch(function (err) {
-                    var msg = typeof err === 'object' ? JSON.stringify(err) : String(err);
-                    {{{ makeDynCall("vii", "Yes2SDKStatsCallbacks._getPtr") }}}(0, Yes2SDKStatsCallbacks.allocateString(msg));
-                });
+            try {
+                window.Yes2SDK.stats.getStatsAsync(keys)
+                    .then(function (result) {
+                        var json = JSON.stringify(result || {});
+                        {{{ makeDynCall("vii", "Yes2SDKStatsCallbacks._getPtr") }}}(1, Yes2SDKStatsCallbacks.allocateString(json));
+                    })
+                    .catch(function (err) {
+                        var msg = typeof err === 'object' ? JSON.stringify(err) : String(err);
+                        {{{ makeDynCall("vii", "Yes2SDKStatsCallbacks._getPtr") }}}(0, Yes2SDKStatsCallbacks.allocateString(msg));
+                    });
+            } catch (e) {
+                // Synchronous throw (e.g. method missing on this platform) never reaches .catch — route it here so the Lua callback still fires.
+                {{{ makeDynCall("vii", "Yes2SDKStatsCallbacks._getPtr") }}}(0, Yes2SDKStatsCallbacks.allocateString(typeof e === 'object' ? JSON.stringify(e) : String(e)));
+            }
         } else {
             {{{ makeDynCall("vii", "Yes2SDKStatsCallbacks._getPtr") }}}(0, Yes2SDKStatsCallbacks.allocateString("SDK not initialized"));
         }
@@ -44,14 +49,19 @@ var Yes2SDKStatsLib = {
         }
 
         if (window.Yes2SDK && window.Yes2SDK.stats) {
-            window.Yes2SDK.stats.setStatsAsync(stats)
-                .then(function () {
-                    {{{ makeDynCall("vii", "Yes2SDKStatsCallbacks._setPtr") }}}(1, 0);
-                })
-                .catch(function (err) {
-                    var msg = typeof err === 'object' ? JSON.stringify(err) : String(err);
-                    {{{ makeDynCall("vii", "Yes2SDKStatsCallbacks._setPtr") }}}(0, Yes2SDKStatsCallbacks.allocateString(msg));
-                });
+            try {
+                window.Yes2SDK.stats.setStatsAsync(stats)
+                    .then(function () {
+                        {{{ makeDynCall("vii", "Yes2SDKStatsCallbacks._setPtr") }}}(1, 0);
+                    })
+                    .catch(function (err) {
+                        var msg = typeof err === 'object' ? JSON.stringify(err) : String(err);
+                        {{{ makeDynCall("vii", "Yes2SDKStatsCallbacks._setPtr") }}}(0, Yes2SDKStatsCallbacks.allocateString(msg));
+                    });
+            } catch (e) {
+                // Synchronous throw (e.g. method missing on this platform) never reaches .catch — route it here so the Lua callback still fires.
+                {{{ makeDynCall("vii", "Yes2SDKStatsCallbacks._setPtr") }}}(0, Yes2SDKStatsCallbacks.allocateString(typeof e === 'object' ? JSON.stringify(e) : String(e)));
+            }
         } else {
             {{{ makeDynCall("vii", "Yes2SDKStatsCallbacks._setPtr") }}}(0, Yes2SDKStatsCallbacks.allocateString("SDK not initialized"));
         }
@@ -67,15 +77,20 @@ var Yes2SDKStatsLib = {
         }
 
         if (window.Yes2SDK && window.Yes2SDK.stats) {
-            window.Yes2SDK.stats.incrementStatsAsync(increments)
-                .then(function (result) {
-                    var json = JSON.stringify(result || {});
-                    {{{ makeDynCall("vii", "Yes2SDKStatsCallbacks._incrementPtr") }}}(1, Yes2SDKStatsCallbacks.allocateString(json));
-                })
-                .catch(function (err) {
-                    var msg = typeof err === 'object' ? JSON.stringify(err) : String(err);
-                    {{{ makeDynCall("vii", "Yes2SDKStatsCallbacks._incrementPtr") }}}(0, Yes2SDKStatsCallbacks.allocateString(msg));
-                });
+            try {
+                window.Yes2SDK.stats.incrementStatsAsync(increments)
+                    .then(function (result) {
+                        var json = JSON.stringify(result || {});
+                        {{{ makeDynCall("vii", "Yes2SDKStatsCallbacks._incrementPtr") }}}(1, Yes2SDKStatsCallbacks.allocateString(json));
+                    })
+                    .catch(function (err) {
+                        var msg = typeof err === 'object' ? JSON.stringify(err) : String(err);
+                        {{{ makeDynCall("vii", "Yes2SDKStatsCallbacks._incrementPtr") }}}(0, Yes2SDKStatsCallbacks.allocateString(msg));
+                    });
+            } catch (e) {
+                // Synchronous throw (e.g. method missing on this platform) never reaches .catch — route it here so the Lua callback still fires.
+                {{{ makeDynCall("vii", "Yes2SDKStatsCallbacks._incrementPtr") }}}(0, Yes2SDKStatsCallbacks.allocateString(typeof e === 'object' ? JSON.stringify(e) : String(e)));
+            }
         } else {
             {{{ makeDynCall("vii", "Yes2SDKStatsCallbacks._incrementPtr") }}}(0, Yes2SDKStatsCallbacks.allocateString("SDK not initialized"));
         }
