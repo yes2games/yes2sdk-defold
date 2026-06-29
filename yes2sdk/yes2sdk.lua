@@ -587,6 +587,15 @@ end
 
 -- ── IAP (in-app purchases) ──
 
+-- True between an iap_purchase / iap_consume_purchase call and its callback.
+-- A re-entrant call would overwrite the in-flight request's single listener slot,
+-- silently dropping its callback — for a purchase that means the platform still
+-- charges the player but the game never learns, so we reject re-entry instead.
+-- If a purchase never settles the flag stays set (further purchases are blocked
+-- for the session, the safe failure); a reload recovers.
+local _iap_purchase_in_flight = false
+local _iap_consume_in_flight = false
+
 --- Get the full catalog of products available for purchase.
 -- Callback signature: function(self, success, catalog_json) where catalog_json is a JSON
 -- array string of products: '[{"productId":"...","title":"...","description":"...",
@@ -605,12 +614,22 @@ end
 
 --- Initiate a purchase of the given product.
 -- @param product_id Product identifier (string).
--- @param developer_payload Optional string passed through for your own verification (nil/omitted to skip).
+-- @param developer_payload Positional optional string passed through for your own
+--   verification — pass nil to skip (you must still pass the callback after it).
 -- Callback signature: function(self, success, purchase_json) where purchase_json is a JSON
 -- object of the form '{"purchaseToken":"...","productId":"...","paymentId":"...",
 -- "purchaseTime":"...","developerPayload":"...","signedRequest":"..."}'. Verify server-side.
+-- Rejected (no-op) if a purchase is already in flight; wait for the callback first.
 function M.iap_purchase(product_id, developer_payload, callback)
-  sdk.iap_purchase(product_id, developer_payload, callback)
+  if _iap_purchase_in_flight then
+    print("[Yes2SDK] iap_purchase rejected — a purchase is already in flight. Wait for its callback before calling iap_purchase again.")
+    return
+  end
+  _iap_purchase_in_flight = true
+  sdk.iap_purchase(product_id, developer_payload, function(self, success, purchase_json)
+    _iap_purchase_in_flight = false
+    if callback then callback(self, success, purchase_json) end
+  end)
 end
 
 --- Get the player's outstanding (unconsumed) purchases.
@@ -623,8 +642,17 @@ end
 --- Consume a purchase so a consumable product can be bought again.
 -- @param purchase_token The purchaseToken from the purchase to consume (string).
 -- Callback signature: function(self, success, error) where error is nil on success.
+-- Rejected (no-op) if a consume is already in flight; wait for the callback first.
 function M.iap_consume_purchase(purchase_token, callback)
-  sdk.iap_consume_purchase(purchase_token, callback)
+  if _iap_consume_in_flight then
+    print("[Yes2SDK] iap_consume_purchase rejected — a consume is already in flight. Wait for its callback before calling iap_consume_purchase again.")
+    return
+  end
+  _iap_consume_in_flight = true
+  sdk.iap_consume_purchase(purchase_token, function(self, success, err)
+    _iap_consume_in_flight = false
+    if callback then callback(self, success, err) end
+  end)
 end
 
 --- Check whether in-app purchases are supported on the current platform.
