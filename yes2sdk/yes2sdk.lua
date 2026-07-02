@@ -309,10 +309,19 @@ end
 
 -- ── Player ──
 
+--- Get the player's display name (synchronous).
+-- Backed by Core's public getPlayer(); the underlying call is async, so the first
+-- invocation (right after initialize) may return the default "Player" until the
+-- identity is fetched — subsequent calls return the resolved name. For a guaranteed
+-- fresh value, use player_get_unique_id / the async player accessors.
 function M.player_get_name()
   return sdk.player_get_name()
 end
 
+--- Get the player's platform id (synchronous). Empty string when unavailable.
+-- Same priming behavior as player_get_name: may be empty on the first call until
+-- Core's getPlayer() resolves, then returns the resolved id. This is the platform
+-- player id; for the permanent unique identifier use player_get_unique_id.
 function M.player_get_id()
   return sdk.player_get_id()
 end

@@ -4,6 +4,11 @@ All notable changes to Yes2SDK for Defold will be documented in this file.
 
 Format follows [Keep a Changelog](https://keepachangelog.com/). Versioning follows [Semantic Versioning](https://semver.org/).
 
+## [1.5.4] - 2026-07-02
+
+### Fixed
+- **`player_get_name` / `player_get_id`** now resolve through Core's public player API instead of a private Core internal. Previously they reached into an underscore-prefixed Core member that no platform actually implements, so they always returned the `"Player"` / empty-string defaults; a Core refactor could also have broken them silently at runtime. They now prime a small identity cache from the public `getPlayer()` and return the real values. Because that call is async, the first invocation right after `initialize` may still return the default until the identity resolves — subsequent calls return the resolved value.
+
 ## [1.5.3] - 2026-07-02
 
 ### Added

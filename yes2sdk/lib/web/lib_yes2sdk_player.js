@@ -11,27 +11,60 @@ var Yes2SDKPlayerLib = {
         _getPhotoPtr: null,
         _getSignedInfoPtr: null,
 
+        // Synchronous getName/getId serve from this cache. Core's player identity
+        // API is async (getPlayer() returns a Promise), so we prime the cache from
+        // the public getPlayer() on first access and return the resolved values on
+        // subsequent calls. Until it resolves, the sync getters return safe defaults.
+        _cachedName: null,
+        _cachedId: null,
+        _identityFetching: false,
+
         allocateString: function (str) {
             return stringToUTF8OnStack(str);
+        },
+
+        // Fire-and-forget prime of the identity cache via Core's public getPlayer().
+        // Never reaches into Core internals; guarded so at most one fetch is in flight.
+        primeIdentity: function () {
+            if (Yes2SDKPlayerCallbacks._identityFetching) return;
+            if (!(window.Yes2SDK && window.Yes2SDK.player && typeof window.Yes2SDK.player.getPlayer === 'function')) return;
+            Yes2SDKPlayerCallbacks._identityFetching = true;
+            try {
+                window.Yes2SDK.player.getPlayer()
+                    .then(function (player) {
+                        if (player) {
+                            if (player.name != null) Yes2SDKPlayerCallbacks._cachedName = String(player.name);
+                            if (player.id != null) Yes2SDKPlayerCallbacks._cachedId = String(player.id);
+                        }
+                        Yes2SDKPlayerCallbacks._identityFetching = false;
+                    })
+                    .catch(function () {
+                        Yes2SDKPlayerCallbacks._identityFetching = false;
+                    });
+            } catch (e) {
+                Yes2SDKPlayerCallbacks._identityFetching = false;
+            }
         }
     },
 
     Yes2SDK_player_getName: function () {
         try {
-            if (window.Yes2SDK && window.Yes2SDK.player && window.Yes2SDK.player._strategy) {
-                var name = window.Yes2SDK.player._strategy.getName ? window.Yes2SDK.player._strategy.getName() : "Player";
-                return Yes2SDKPlayerCallbacks.allocateString(name);
+            if (Yes2SDKPlayerCallbacks._cachedName != null) {
+                return Yes2SDKPlayerCallbacks.allocateString(Yes2SDKPlayerCallbacks._cachedName);
             }
+            // Not cached yet — kick off the async prime for the next call.
+            Yes2SDKPlayerCallbacks.primeIdentity();
         } catch (e) {}
         return Yes2SDKPlayerCallbacks.allocateString("Player");
     },
 
     Yes2SDK_player_getId: function () {
         try {
-            if (window.Yes2SDK && window.Yes2SDK.player && window.Yes2SDK.player._strategy) {
-                var id = window.Yes2SDK.player._strategy.getId ? window.Yes2SDK.player._strategy.getId() : "";
-                return Yes2SDKPlayerCallbacks.allocateString(id);
+            if (Yes2SDKPlayerCallbacks._cachedId != null) {
+                return Yes2SDKPlayerCallbacks.allocateString(Yes2SDKPlayerCallbacks._cachedId);
             }
+            // Not cached yet — kick off the async prime for the next call.
+            Yes2SDKPlayerCallbacks.primeIdentity();
         } catch (e) {}
         return Yes2SDKPlayerCallbacks.allocateString("");
     },
