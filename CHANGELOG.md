@@ -4,6 +4,11 @@ All notable changes to Yes2SDK for Defold will be documented in this file.
 
 Format follows [Keep a Changelog](https://keepachangelog.com/). Versioning follows [Semantic Versioning](https://semver.org/).
 
+## [1.5.2] - 2026-07-02
+
+### Added
+- **`analytics_log_event(event_name, params_json?)`** — log a custom, arbitrarily named analytics event. `params_json` is an optional JSON string of event parameters. On builds with a Yandex Metrica counter configured, custom events are delivered as `reachGoal(event_name, params)`. Brings Defold to parity with the other engines' generic event logging.
+
 ## [1.5.1] - 2026-06-29
 
 Adds in-app purchases and signed player identity, completing parity for studios shipping a shop with consumable purchases on Yandex. Functional on platforms that expose a store; others report availability via `iap_is_supported()` and degrade gracefully.

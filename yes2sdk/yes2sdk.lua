@@ -282,6 +282,14 @@ function M.analytics_log_game_choice(decision, choice)
   sdk.analytics_log_game_choice(decision, choice)
 end
 
+--- Log a custom analytics event.
+-- @param event_name Event name (string).
+-- @param params_json Optional JSON string of event parameters (e.g. json.encode({ level = 3 })).
+-- On Yandex builds with a Metrica counter configured, this fires reachGoal(event_name, params).
+function M.analytics_log_event(event_name, params_json)
+  sdk.analytics_log_event(event_name, params_json)
+end
+
 -- ── Player ──
 
 function M.player_get_name()

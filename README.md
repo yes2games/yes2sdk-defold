@@ -18,12 +18,12 @@ In your `game.project`, add:
 
 ```ini
 [project]
-dependencies#0 = https://github.com/yes2games/yes2sdk-defold/archive/refs/tags/v1.5.1.zip
+dependencies#0 = https://github.com/yes2games/yes2sdk-defold/archive/refs/tags/v1.5.2.zip
 ```
 
 Then in Defold Editor: **Project > Fetch Libraries**.
 
-> Pinning the URL with `tags/v1.5.1` keeps the resolved hash stable. Bump the tag when a newer release ships. **Don't use `/refs/heads/main.zip`** — branch archives are served less reliably by GitHub and `Fetch Libraries` fails intermittently.
+> Pinning the URL with `tags/v1.5.2` keeps the resolved hash stable. Bump the tag when a newer release ships. **Don't use `/refs/heads/main.zip`** — branch archives are served less reliably by GitHub and `Fetch Libraries` fails intermittently.
 
 ### Via Local Copy
 
@@ -205,7 +205,12 @@ yes2sdk.analytics_log_score(9999)
 yes2sdk.analytics_log_tutorial_start()
 yes2sdk.analytics_log_tutorial_end()
 yes2sdk.analytics_log_game_choice("character", "wizard")
+-- Custom event with optional params (params as a JSON string):
+yes2sdk.analytics_log_event("boss_defeated")
+yes2sdk.analytics_log_event("boss_defeated", json.encode({ level = 3, time = 42.5 }))
 ```
+
+> Custom events are delivered to Yandex Metrica as `reachGoal(event_name, params)` on builds with a Metrica counter configured; on other platforms they are logged through the SDK's analytics pipeline.
 
 ---
 
@@ -361,7 +366,7 @@ Use a tagged release URL, not a branch archive. GitHub serves tagged archives mo
 
 ```ini
 # Good — tagged release
-dependencies#0 = https://github.com/yes2games/yes2sdk-defold/archive/refs/tags/v1.5.1.zip
+dependencies#0 = https://github.com/yes2games/yes2sdk-defold/archive/refs/tags/v1.5.2.zip
 
 # Bad — branch archive (intermittent failures)
 dependencies#0 = https://github.com/yes2games/yes2sdk-defold/archive/refs/heads/main.zip
