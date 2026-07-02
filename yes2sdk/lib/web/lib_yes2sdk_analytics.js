@@ -38,6 +38,19 @@ var Yes2SDKAnalyticsLib = {
                 choice: UTF8ToString(choicePtr)
             });
         }
+    },
+
+    Yes2SDK_analytics_logEvent: function (namePtr, paramsJsonPtr) {
+        if (window.Yes2SDK && window.Yes2SDK.analytics) {
+            var params;
+            if (paramsJsonPtr) {
+                try { params = JSON.parse(UTF8ToString(paramsJsonPtr) || "{}"); }
+                catch (e) { params = undefined; }
+            }
+            // Core: logEvent(eventName, valueToSum?, parameters?). Pass params in
+            // the parameters slot so Yandex Metrica forwards ym(id, 'reachGoal', name, params).
+            window.Yes2SDK.analytics.logEvent(UTF8ToString(namePtr), undefined, params);
+        }
     }
 }
 

@@ -46,4 +46,13 @@ int Yes2SDKAnalytics::LogGameChoice(lua_State* L) {
     assert(top == lua_gettop(L));
     return 0;
 }
+int Yes2SDKAnalytics::LogEvent(lua_State* L) {
+    int top = lua_gettop(L);
+    const char* name = luaL_checkstring(L, 1);
+    // Optional 2nd arg: JSON string of event params. nil/missing → NULL = "no params".
+    const char* paramsJson = luaL_optstring(L, 2, NULL);
+    Yes2SDK_analytics_logEvent(name, paramsJson);
+    assert(top == lua_gettop(L));
+    return 0;
+}
 #endif

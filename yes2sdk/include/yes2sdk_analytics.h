@@ -9,6 +9,7 @@ public:
     static int LogTutorialStart(lua_State* L);
     static int LogTutorialEnd(lua_State* L);
     static int LogGameChoice(lua_State* L);
+    static int LogEvent(lua_State* L);
 };
 extern "C" {
     void Yes2SDK_analytics_logLevelStart(const char* level);
@@ -17,5 +18,6 @@ extern "C" {
     void Yes2SDK_analytics_logTutorialStart();
     void Yes2SDK_analytics_logTutorialEnd();
     void Yes2SDK_analytics_logGameChoice(const char* decision, const char* choice);
+    void Yes2SDK_analytics_logEvent(const char* name, const char* paramsJson);
 }
 #endif

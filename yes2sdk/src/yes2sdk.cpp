@@ -20,7 +20,7 @@
 #define EXTENSION_NAME Yes2SDK
 #define LIB_NAME "Yes2SDK"
 #define MODULE_NAME "yes2sdk"
-#define VERSION "1.5.1"
+#define VERSION "1.5.2"
 
 #if defined(DM_PLATFORM_HTML5)
 
@@ -221,6 +221,7 @@ static const luaL_reg Module_methods[] = {
     {"analytics_log_tutorial_start", Yes2SDKAnalytics::LogTutorialStart},
     {"analytics_log_tutorial_end", Yes2SDKAnalytics::LogTutorialEnd},
     {"analytics_log_game_choice", Yes2SDKAnalytics::LogGameChoice},
+    {"analytics_log_event", Yes2SDKAnalytics::LogEvent},
 
     // Player
     {"player_get_name", Yes2SDKPlayer::GetName},
