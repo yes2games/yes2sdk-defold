@@ -20,7 +20,7 @@
 #define EXTENSION_NAME Yes2SDK
 #define LIB_NAME "Yes2SDK"
 #define MODULE_NAME "yes2sdk"
-#define VERSION "1.5.2"
+#define VERSION "1.5.3"
 
 #if defined(DM_PLATFORM_HTML5)
 
@@ -206,6 +206,8 @@ static const luaL_reg Module_methods[] = {
     {"ads_show_interstitial", Yes2SDKAds::ShowInterstitial},
     {"ads_show_rewarded", Yes2SDKAds::ShowRewarded},
     {"ads_is_rewarded_ad_available", Yes2SDKAds::IsRewardedAdAvailable},
+    {"ads_is_interstitial_supported", Yes2SDKAds::IsInterstitialSupported},
+    {"ads_is_rewarded_supported", Yes2SDKAds::IsRewardedSupported},
 
     // Session / Gameplay
     {"session_gameplay_start", Yes2SDKSession::GameplayStart},
@@ -234,10 +236,12 @@ static const luaL_reg Module_methods[] = {
     {"player_get_mode", Yes2SDKPlayer::GetMode},
     {"player_get_photo", Yes2SDKPlayer::GetPhoto},
     {"player_get_signed_info", Yes2SDKPlayer::GetSignedInfo},
+    {"player_is_data_supported", Yes2SDKPlayer::IsDataSupported},
 
     // Auth
     {"auth_is_authenticated", Yes2SDKAuth::IsAuthenticated},
     {"auth_sign_in", Yes2SDKAuth::SignIn},
+    {"auth_is_supported", Yes2SDKAuth::IsSupported},
 
     // Data (key-value storage)
     {"data_get_int", Yes2SDKData::GetInt},

@@ -18,12 +18,12 @@ In your `game.project`, add:
 
 ```ini
 [project]
-dependencies#0 = https://github.com/yes2games/yes2sdk-defold/archive/refs/tags/v1.5.2.zip
+dependencies#0 = https://github.com/yes2games/yes2sdk-defold/archive/refs/tags/v1.5.3.zip
 ```
 
 Then in Defold Editor: **Project > Fetch Libraries**.
 
-> Pinning the URL with `tags/v1.5.2` keeps the resolved hash stable. Bump the tag when a newer release ships. **Don't use `/refs/heads/main.zip`** — branch archives are served less reliably by GitHub and `Fetch Libraries` fails intermittently.
+> Pinning the URL with `tags/v1.5.3` keeps the resolved hash stable. Bump the tag when a newer release ships. **Don't use `/refs/heads/main.zip`** — branch archives are served less reliably by GitHub and `Fetch Libraries` fails intermittently.
 
 ### Via Local Copy
 
@@ -216,7 +216,15 @@ yes2sdk.analytics_log_event("boss_defeated", json.encode({ level = 3, time = 42.
 
 ## Optional APIs
 
-These modules add extra player-facing features. They are **not guaranteed** to be available at runtime — guard with `_is_supported()` (available on `auth`, `friends`, `banners`, `score`) and handle the unsupported case gracefully. Don't make your core gameplay depend on them.
+These modules add extra player-facing features. They are **not guaranteed** to be available at runtime — guard with a support check and handle the unsupported case gracefully. Don't make your core gameplay depend on them.
+
+Support checks available: `ads_is_interstitial_supported()`, `ads_is_rewarded_supported()`, `auth_is_supported()`, `player_is_data_supported()`, `friends_is_supported()`, `banners_is_supported()`, `score_is_supported()`, `leaderboard_is_supported()`, `stats_is_supported()`, `config_is_supported()`, `review_is_supported()`, `iap_is_supported()`.
+
+```lua
+if yes2sdk.ads_is_rewarded_supported() then
+    -- show a "Watch ad for reward" button
+end
+```
 
 ### Auth
 
@@ -366,7 +374,7 @@ Use a tagged release URL, not a branch archive. GitHub serves tagged archives mo
 
 ```ini
 # Good — tagged release
-dependencies#0 = https://github.com/yes2games/yes2sdk-defold/archive/refs/tags/v1.5.2.zip
+dependencies#0 = https://github.com/yes2games/yes2sdk-defold/archive/refs/tags/v1.5.3.zip
 
 # Bad — branch archive (intermittent failures)
 dependencies#0 = https://github.com/yes2games/yes2sdk-defold/archive/refs/heads/main.zip

@@ -44,6 +44,10 @@ if not sdk then
   function sdk.review_is_supported() warn() return false end
   function sdk.iap_is_supported() warn() return false end
   function sdk.ads_is_rewarded_ad_available() warn() return false end
+  function sdk.ads_is_interstitial_supported() warn() return false end
+  function sdk.ads_is_rewarded_supported() warn() return false end
+  function sdk.auth_is_supported() warn() return false end
+  function sdk.player_is_data_supported() warn() return false end
   function sdk.session_is_audio_enabled() warn() return true end
 end
 
@@ -219,6 +223,19 @@ function M.ads_is_rewarded_ad_available()
   return sdk.ads_is_rewarded_ad_available()
 end
 
+--- Whether interstitial ads are supported on the current platform.
+-- Use to gate features before calling ads_show_interstitial(). Returns a boolean.
+function M.ads_is_interstitial_supported()
+  return sdk.ads_is_interstitial_supported()
+end
+
+--- Whether rewarded ads are supported on the current platform.
+-- Capability check (unlike ads_is_rewarded_ad_available, which is runtime availability).
+-- Use to gate features before calling ads_show_rewarded(). Returns a boolean.
+function M.ads_is_rewarded_supported()
+  return sdk.ads_is_rewarded_supported()
+end
+
 -- ── Session ──
 
 function M.session_gameplay_start()
@@ -354,6 +371,13 @@ function M.player_get_signed_info(payload, callback)
   sdk.player_get_signed_info(payload, callback)
 end
 
+--- Whether player data storage (player_get_data / player_set_data) is available.
+-- Backed by local web storage on platforms without cloud save, so this is true
+-- whenever the SDK is initialized. Returns a boolean.
+function M.player_is_data_supported()
+  return sdk.player_is_data_supported()
+end
+
 -- ── Auth ──
 
 function M.auth_is_authenticated()
@@ -362,6 +386,12 @@ end
 
 function M.auth_sign_in(callback)
   sdk.auth_sign_in(callback)
+end
+
+--- Whether platform authentication (sign-in) is supported on the current platform.
+-- Use to gate a login button before calling auth_sign_in(). Returns a boolean.
+function M.auth_is_supported()
+  return sdk.auth_is_supported()
 end
 
 -- ── Data (key-value storage) ──

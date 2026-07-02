@@ -14,6 +14,7 @@ public:
     static int GetMode(lua_State* L);
     static int GetPhoto(lua_State* L);
     static int GetSignedInfo(lua_State* L);
+    static int IsDataSupported(lua_State* L);
 private:
     static void OnGetData(const int success, const char* data);
     static void OnSetData(const int success, const char* error);
@@ -35,5 +36,6 @@ extern "C" {
     void Yes2SDK_player_getMode(Yes2SDKPlayer::OnDataCallback callback);
     void Yes2SDK_player_getPhoto(const char* size, Yes2SDKPlayer::OnDataCallback callback);
     void Yes2SDK_player_getSignedInfo(const char* payload, Yes2SDKPlayer::OnDataCallback callback);
+    int Yes2SDK_player_isDataSupported();
 }
 #endif

@@ -119,6 +119,24 @@ var Yes2SDKAdsLib = {
             }
         } catch (e) {}
         return 0;
+    },
+
+    Yes2SDK_ads_isInterstitialSupported: function () {
+        try {
+            if (window.Yes2SDK && window.Yes2SDK.ads && typeof window.Yes2SDK.ads.isInterstitialSupported === 'function') {
+                return window.Yes2SDK.ads.isInterstitialSupported() ? 1 : 0;
+            }
+        } catch (e) {}
+        return 0;
+    },
+
+    Yes2SDK_ads_isRewardedSupported: function () {
+        try {
+            if (window.Yes2SDK && window.Yes2SDK.ads && typeof window.Yes2SDK.ads.isRewardedSupported === 'function') {
+                return window.Yes2SDK.ads.isRewardedSupported() ? 1 : 0;
+            }
+        } catch (e) {}
+        return 0;
     }
 }
 

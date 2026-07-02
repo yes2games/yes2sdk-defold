@@ -23,4 +23,8 @@ int Yes2SDKAuth::SignIn(lua_State* L) {
     Yes2SDK_auth_signIn(Yes2SDKAuth::OnSignIn);
     return 0;
 }
+int Yes2SDKAuth::IsSupported(lua_State* L) {
+    lua_pushboolean(L, Yes2SDK_auth_isSupported());
+    return 1;
+}
 #endif

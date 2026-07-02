@@ -108,4 +108,16 @@ int Yes2SDKAds::IsRewardedAdAvailable(lua_State *L)
     return 1;
 }
 
+int Yes2SDKAds::IsInterstitialSupported(lua_State *L)
+{
+    lua_pushboolean(L, Yes2SDK_ads_isInterstitialSupported());
+    return 1;
+}
+
+int Yes2SDKAds::IsRewardedSupported(lua_State *L)
+{
+    lua_pushboolean(L, Yes2SDK_ads_isRewardedSupported());
+    return 1;
+}
+
 #endif
