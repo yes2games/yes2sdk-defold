@@ -4,6 +4,11 @@ All notable changes to Yes2SDK for Defold will be documented in this file.
 
 Format follows [Keep a Changelog](https://keepachangelog.com/). Versioning follows [Semantic Versioning](https://semver.org/).
 
+## [1.5.5] - 2026-07-02
+
+### Fixed
+- **Audio resumes automatically after an ad closes.** Ad surfaces take focus, which the browser answers by suspending the page's WebAudio `AudioContext`, leaving game audio silent until the tab is blurred and refocused. The ad bridge now tracks the page's `AudioContext` instances and resumes any suspended ones when an ad closes (`afterAd`), so audio returns with no user interaction. Resuming is idempotent — a no-op when the context was never suspended.
+
 ## [1.5.4] - 2026-07-02
 
 ### Fixed

@@ -7,6 +7,49 @@ var Yes2SDKAdsLib = {
         _adViewedPtr: null,
         _noFillPtr: null,
 
+        // Ad surfaces steal focus, which the browser answers by suspending the
+        // page's WebAudio AudioContext — leaving game audio dead after the ad
+        // closes until the tab is blurred/refocused. Defold exposes no stable
+        // audio-context global (unlike Unity's WEBAudio.audioContext), so instead
+        // of guessing its handle we wrap the AudioContext constructor at startup to
+        // track every instance, then resume any suspended ones on ad close.
+        _audioContexts: [],
+        _audioTrackerInstalled: false,
+
+        installAudioContextTracker: function () {
+            if (Yes2SDKAdsCallbacks._audioTrackerInstalled) return;
+            Yes2SDKAdsCallbacks._audioTrackerInstalled = true;
+            try {
+                if (typeof window === 'undefined') return;
+                ['AudioContext', 'webkitAudioContext'].forEach(function (name) {
+                    var Original = window[name];
+                    if (typeof Original !== 'function' || Original.__yes2Wrapped) return;
+                    var Wrapped = function () {
+                        var ctx = Reflect.construct(Original, arguments, Wrapped);
+                        try { Yes2SDKAdsCallbacks._audioContexts.push(ctx); } catch (e) {}
+                        return ctx;
+                    };
+                    Wrapped.prototype = Original.prototype;
+                    Wrapped.__yes2Wrapped = true;
+                    window[name] = Wrapped;
+                });
+            } catch (e) {
+                // Tracking is best-effort — never break startup over it.
+                console.warn("[Yes2SDK] AudioContext tracker install skipped:", e);
+            }
+        },
+
+        resumeAudioContexts: function () {
+            try {
+                Yes2SDKAdsCallbacks._audioContexts.forEach(function (ctx) {
+                    if (ctx && ctx.state === 'suspended' && typeof ctx.resume === 'function') {
+                        // resume() is idempotent and a no-op when not suspended.
+                        ctx.resume().catch(function () {});
+                    }
+                });
+            } catch (e) { /* non-fatal */ }
+        },
+
         beforeAd: function () {
             if (Yes2SDKAdsCallbacks._beforeAdPtr) {
                 try {
@@ -18,6 +61,9 @@ var Yes2SDKAdsLib = {
         },
 
         afterAd: function () {
+            // Resume any AudioContext the ad surface suspended, before handing
+            // control back to the game, so audio comes back with no user action.
+            Yes2SDKAdsCallbacks.resumeAudioContexts();
             if (Yes2SDKAdsCallbacks._afterAdPtr) {
                 try {
                     {{{ makeDynCall("vii", "Yes2SDKAdsCallbacks._afterAdPtr") }}}(1, 0);
@@ -57,6 +103,11 @@ var Yes2SDKAdsLib = {
             }
         }
     },
+
+    // Install the AudioContext tracker at module setup so it wraps the constructor
+    // before Defold's audio device creates its context (created lazily on first
+    // sound / user gesture, i.e. after this runs).
+    $Yes2SDKAdsCallbacks__postset: 'Yes2SDKAdsCallbacks.installAudioContextTracker();',
 
     Yes2SDK_ads_showInterstitial: function (placementPtr, beforeAd, afterAd, noFill) {
         Yes2SDKAdsCallbacks._beforeAdPtr = beforeAd;
