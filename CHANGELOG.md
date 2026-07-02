@@ -4,6 +4,11 @@ All notable changes to Yes2SDK for Defold will be documented in this file.
 
 Format follows [Keep a Changelog](https://keepachangelog.com/). Versioning follows [Semantic Versioning](https://semver.org/).
 
+## [1.5.3] - 2026-07-02
+
+### Added
+- **Support checks for ads, auth, and player** — `ads_is_interstitial_supported()`, `ads_is_rewarded_supported()`, `auth_is_supported()`, and `player_is_data_supported()`. Games can now gate these optional features with a support check before use, matching the pattern already available on banners, score, friends, and the other modules. Each returns a boolean and `false` on platforms that don't support the feature (and when the extension isn't loaded).
+
 ## [1.5.2] - 2026-07-02
 
 ### Added

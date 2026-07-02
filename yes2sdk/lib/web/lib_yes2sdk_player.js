@@ -36,6 +36,15 @@ var Yes2SDKPlayerLib = {
         return Yes2SDKPlayerCallbacks.allocateString("");
     },
 
+    Yes2SDK_player_isDataSupported: function () {
+        try {
+            if (window.Yes2SDK && window.Yes2SDK.player && typeof window.Yes2SDK.player.isDataSupported === 'function') {
+                return window.Yes2SDK.player.isDataSupported() ? 1 : 0;
+            }
+        } catch (e) {}
+        return 0;
+    },
+
     Yes2SDK_player_getData: function (keysJsonPtr, callback) {
         Yes2SDKPlayerCallbacks._getDataPtr = callback;
         var keys;

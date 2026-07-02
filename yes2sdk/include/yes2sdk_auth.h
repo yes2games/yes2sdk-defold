@@ -6,11 +6,13 @@ public:
     typedef void (*OnSignInCallback)(const int success, const char* error);
     static int IsAuthenticated(lua_State* L);
     static int SignIn(lua_State* L);
+    static int IsSupported(lua_State* L);
 private:
     static void OnSignIn(const int success, const char* error);
 };
 extern "C" {
     int Yes2SDK_auth_isAuthenticated();
     void Yes2SDK_auth_signIn(Yes2SDKAuth::OnSignInCallback callback);
+    int Yes2SDK_auth_isSupported();
 }
 #endif

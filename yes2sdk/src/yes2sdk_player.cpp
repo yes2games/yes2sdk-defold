@@ -153,4 +153,8 @@ int Yes2SDKPlayer::GetSignedInfo(lua_State* L) {
     Yes2SDK_player_getSignedInfo(payload, Yes2SDKPlayer::OnGetSignedInfo);
     return 0;
 }
+int Yes2SDKPlayer::IsDataSupported(lua_State* L) {
+    lua_pushboolean(L, Yes2SDK_player_isDataSupported());
+    return 1;
+}
 #endif

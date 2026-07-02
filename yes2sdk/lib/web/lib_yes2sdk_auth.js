@@ -17,6 +17,15 @@ var Yes2SDKAuthLib = {
         return 0;
     },
 
+    Yes2SDK_auth_isSupported: function () {
+        try {
+            if (window.Yes2SDK && window.Yes2SDK.auth && typeof window.Yes2SDK.auth.isSupported === 'function') {
+                return window.Yes2SDK.auth.isSupported() ? 1 : 0;
+            }
+        } catch (e) {}
+        return 0;
+    },
+
     Yes2SDK_auth_signIn: function (callback) {
         Yes2SDKAuthCallbacks._signInPtr = callback;
 
