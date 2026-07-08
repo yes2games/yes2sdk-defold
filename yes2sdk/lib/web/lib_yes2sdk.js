@@ -11,9 +11,13 @@ var Yes2SDKLib = {
         _onPausePtr: null,
         _onResumePtr: null,
         _onAudioEnabledChangePtr: null,
+        _onAccountDialogOpenPtr: null,
+        _onAccountDialogClosePtr: null,
         _pauseWired: false,
         _resumeWired: false,
         _audioWired: false,
+        _accountDialogOpenWired: false,
+        _accountDialogCloseWired: false,
 
         // Minimum injected Core runtime this wrapper build is compatible with.
         // Distinct from the wrapper's own version (yes2sdk.cpp VERSION) — this is the
@@ -140,6 +144,36 @@ var Yes2SDKLib = {
             Yes2SDKUtils._audioWired = true;
         } else {
             console.warn("[Yes2SDK] on_audio_enabled_change registered before Yes2SDK.on is available — call M.on_audio_enabled_change after M.initialize completes.");
+        }
+    },
+
+    Yes2SDK_onAccountDialogOpen: function (callback) {
+        Yes2SDKUtils._onAccountDialogOpenPtr = callback;
+        if (Yes2SDKUtils._accountDialogOpenWired) return;
+        if (window.Yes2SDK && typeof window.Yes2SDK.on === 'function') {
+            window.Yes2SDK.on("accountDialogOpen", function () {
+                if (Yes2SDKUtils._onAccountDialogOpenPtr) {
+                    {{{ makeDynCall("v", "Yes2SDKUtils._onAccountDialogOpenPtr") }}}();
+                }
+            });
+            Yes2SDKUtils._accountDialogOpenWired = true;
+        } else {
+            console.warn("[Yes2SDK] on_account_dialog_open registered before Yes2SDK.on is available — call M.on_account_dialog_open after M.initialize completes.");
+        }
+    },
+
+    Yes2SDK_onAccountDialogClose: function (callback) {
+        Yes2SDKUtils._onAccountDialogClosePtr = callback;
+        if (Yes2SDKUtils._accountDialogCloseWired) return;
+        if (window.Yes2SDK && typeof window.Yes2SDK.on === 'function') {
+            window.Yes2SDK.on("accountDialogClose", function () {
+                if (Yes2SDKUtils._onAccountDialogClosePtr) {
+                    {{{ makeDynCall("v", "Yes2SDKUtils._onAccountDialogClosePtr") }}}();
+                }
+            });
+            Yes2SDKUtils._accountDialogCloseWired = true;
+        } else {
+            console.warn("[Yes2SDK] on_account_dialog_close registered before Yes2SDK.on is available — call M.on_account_dialog_close after M.initialize completes.");
         }
     }
 }

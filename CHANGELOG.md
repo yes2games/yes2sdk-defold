@@ -4,6 +4,11 @@ All notable changes to Yes2SDK for Defold will be documented in this file.
 
 Format follows [Keep a Changelog](https://keepachangelog.com/). Versioning follows [Semantic Versioning](https://semver.org/).
 
+## [1.5.5] - 2026-07-08
+
+### Added
+- **Account dialog lifecycle events** — `on_account_dialog_open` and `on_account_dialog_close` fire when the platform's account-selection dialog opens and closes, so the game can pause and resume around it. Currently emitted on Yandex; other platforms simply never fire them.
+
 ## [1.5.4] - 2026-07-02
 
 ### Fixed
