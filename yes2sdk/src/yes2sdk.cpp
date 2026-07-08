@@ -31,6 +31,9 @@ lua_Listener onStartGameListener;
 lua_Listener onPauseListener;
 lua_Listener onResumeListener;
 lua_Listener onAudioEnabledChangeListener;
+// Yandex account-selection dialog open / close (payload-free, like pause/resume).
+lua_Listener onAccountDialogOpenListener;
+lua_Listener onAccountDialogCloseListener;
 
 void Yes2SDK::OnInitialize(const int success, const char *error)
 {
@@ -164,6 +167,38 @@ void Yes2SDK::OnAudioEnabledChangeFromJs(const int enabled)
     assert(top == lua_gettop(L));
 }
 
+void Yes2SDK::OnAccountDialogOpenFromJs()
+{
+    lua_State *L = onAccountDialogOpenListener.m_L;
+    if (!L) return;
+    int top = lua_gettop(L);
+
+    lua_pushlistener(L, onAccountDialogOpenListener);
+    int ret = lua_pcall(L, 1, 0, 0);
+    if (ret != 0)
+    {
+        lua_pop(L, 1);
+    }
+
+    assert(top == lua_gettop(L));
+}
+
+void Yes2SDK::OnAccountDialogCloseFromJs()
+{
+    lua_State *L = onAccountDialogCloseListener.m_L;
+    if (!L) return;
+    int top = lua_gettop(L);
+
+    lua_pushlistener(L, onAccountDialogCloseListener);
+    int ret = lua_pcall(L, 1, 0, 0);
+    if (ret != 0)
+    {
+        lua_pop(L, 1);
+    }
+
+    assert(top == lua_gettop(L));
+}
+
 int Yes2SDK::OnPause(lua_State *L)
 {
     int top = lua_gettop(L);
@@ -191,6 +226,24 @@ int Yes2SDK::OnAudioEnabledChange(lua_State *L)
     return 0;
 }
 
+int Yes2SDK::OnAccountDialogOpen(lua_State *L)
+{
+    int top = lua_gettop(L);
+    luaL_checklistener(L, 1, onAccountDialogOpenListener);
+    Yes2SDK_onAccountDialogOpen(Yes2SDK::OnAccountDialogOpenFromJs);
+    assert(top == lua_gettop(L));
+    return 0;
+}
+
+int Yes2SDK::OnAccountDialogClose(lua_State *L)
+{
+    int top = lua_gettop(L);
+    luaL_checklistener(L, 1, onAccountDialogCloseListener);
+    Yes2SDK_onAccountDialogClose(Yes2SDK::OnAccountDialogCloseFromJs);
+    assert(top == lua_gettop(L));
+    return 0;
+}
+
 static const luaL_reg Module_methods[] = {
     // Core
     {"initialize", Yes2SDK::InitializeAsync},
@@ -201,6 +254,8 @@ static const luaL_reg Module_methods[] = {
     {"on_pause", Yes2SDK::OnPause},
     {"on_resume", Yes2SDK::OnResume},
     {"on_audio_enabled_change", Yes2SDK::OnAudioEnabledChange},
+    {"on_account_dialog_open", Yes2SDK::OnAccountDialogOpen},
+    {"on_account_dialog_close", Yes2SDK::OnAccountDialogClose},
 
     // Ads
     {"ads_show_interstitial", Yes2SDKAds::ShowInterstitial},

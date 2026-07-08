@@ -118,6 +118,20 @@ function M.on_audio_enabled_change(callback)
   sdk.on_audio_enabled_change(callback)
 end
 
+--- Subscribe to the platform's account-selection dialog opening.
+-- Currently only fires on Yandex. The game SHOULD pause while the dialog is open.
+-- Callback signature: function(self)
+function M.on_account_dialog_open(callback)
+  sdk.on_account_dialog_open(callback)
+end
+
+--- Subscribe to the platform's account-selection dialog closing.
+-- Currently only fires on Yandex. The game may resume once the dialog is dismissed.
+-- Callback signature: function(self)
+function M.on_account_dialog_close(callback)
+  sdk.on_account_dialog_close(callback)
+end
+
 -- ── Ads ──
 
 local function _clear_ad(request)

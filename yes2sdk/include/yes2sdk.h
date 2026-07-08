@@ -15,6 +15,10 @@ public:
     typedef void (*OnPauseCallback)();
     typedef void (*OnResumeCallback)();
     typedef void (*OnAudioEnabledChangeCallback)(const int enabled);
+    // Yandex account-selection dialog open / close. No payload, mirroring
+    // pause / resume — fire whenever the platform opens or closes the dialog.
+    typedef void (*OnAccountDialogOpenCallback)();
+    typedef void (*OnAccountDialogCloseCallback)();
 
     static int InitializeAsync(lua_State* L);
     static int StartGameAsync(lua_State* L);
@@ -23,6 +27,8 @@ public:
     static int OnPause(lua_State* L);
     static int OnResume(lua_State* L);
     static int OnAudioEnabledChange(lua_State* L);
+    static int OnAccountDialogOpen(lua_State* L);
+    static int OnAccountDialogClose(lua_State* L);
 
 private:
     static void OnInitialize(const int success, const char* error);
@@ -30,6 +36,8 @@ private:
     static void OnPauseFromJs();
     static void OnResumeFromJs();
     static void OnAudioEnabledChangeFromJs(const int enabled);
+    static void OnAccountDialogOpenFromJs();
+    static void OnAccountDialogCloseFromJs();
 };
 
 extern "C"
@@ -41,6 +49,8 @@ extern "C"
     void Yes2SDK_onPause(Yes2SDK::OnPauseCallback callback);
     void Yes2SDK_onResume(Yes2SDK::OnResumeCallback callback);
     void Yes2SDK_onAudioEnabledChange(Yes2SDK::OnAudioEnabledChangeCallback callback);
+    void Yes2SDK_onAccountDialogOpen(Yes2SDK::OnAccountDialogOpenCallback callback);
+    void Yes2SDK_onAccountDialogClose(Yes2SDK::OnAccountDialogCloseCallback callback);
 }
 
 #endif
