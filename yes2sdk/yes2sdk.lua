@@ -49,6 +49,178 @@ if not sdk then
   function sdk.auth_is_supported() warn() return false end
   function sdk.player_is_data_supported() warn() return false end
   function sdk.session_is_audio_enabled() warn() return true end
+
+  -- ── Editor mock (desktop builds only) ──
+  --
+  -- Without a mock, ad callbacks never fire in the editor (only the 30s
+  -- watchdog no_fill) and IAP callbacks never fire at all, so integrations
+  -- could only be tested in an HTML5 bundle. The mock simulates the full
+  -- callback flows on timers, mirroring the Unity SDK's Play Mode mocks:
+  -- 3s interstitial / 5s rewarded, sample IAP catalog, session purchases,
+  -- and selectable failure modes.
+  --
+  -- Configure in game.project (all optional):
+  --   [yes2sdk]
+  --   mock = 0                        <- disable the mock entirely
+  --   mock_rewarded_result = viewed   <- or: dismissed (no-reward path)
+  --   mock_ad_result = normal         <- or: nofill (ads fail, no inventory)
+  --   mock_purchase_result = success  <- or: fail
+  --
+  -- HTML5 keeps the plain warn stub: a missing extension there is a bundling
+  -- mistake the developer must see, not something to paper over.
+  local function mock_config(key, default)
+    if sys.get_config_string then
+      return sys.get_config_string("yes2sdk." .. key, default)
+    end
+    return sys.get_config("yes2sdk." .. key, default)
+  end
+
+  local is_html5 = sys.get_sys_info().system_name == "HTML5"
+  if not is_html5 and mock_config("mock", "1") ~= "0" then
+    print("[Yes2SDK] Editor mock active: init, ads, and IAP are simulated. Set [yes2sdk] mock = 0 in game.project to disable.")
+
+    -- Fire a callback on the next frame. The timer is created inside the
+    -- calling script's context, so the callback receives the correct self.
+    local function next_frame(fn)
+      timer.delay(0, false, function(tself) fn(tself) end)
+    end
+
+    -- Core: fire the init/start callbacks so games gated on them can run.
+    function sdk.initialize(callback)
+      print("[Yes2SDK] Mock: initialize() succeeding")
+      if callback then next_frame(function(tself) callback(tself, true, nil) end) end
+    end
+    function sdk.start_game(callback)
+      print("[Yes2SDK] Mock: start_game() succeeding")
+      if callback then next_frame(function(tself) callback(tself, true, nil) end) end
+    end
+    function sdk.set_loading_progress(progress) end
+
+    -- Ads: delayed flows so pause/resume wiring is exercised like a real ad.
+    -- Durations match the Unity SDK's mock ad popup.
+    local INTERSTITIAL_SECONDS = 3
+    local REWARDED_SECONDS = 5
+
+    function sdk.ads_show_interstitial(placement, before_ad, after_ad, no_fill)
+      if mock_config("mock_ad_result", "normal") == "nofill" then
+        print("[Yes2SDK] Mock: interstitial no-fill (placement: " .. tostring(placement) .. ")")
+        if no_fill then next_frame(function(tself) no_fill(tself, true) end) end
+        return
+      end
+      print("[Yes2SDK] Mock: interstitial ad playing " .. INTERSTITIAL_SECONDS .. "s (placement: " .. tostring(placement) .. "). Pause in before_ad, resume in after_ad.")
+      if before_ad then next_frame(function(tself) before_ad(tself, true) end) end
+      timer.delay(INTERSTITIAL_SECONDS, false, function(tself)
+        print("[Yes2SDK] Mock: interstitial completed (after_ad)")
+        if after_ad then after_ad(tself, true) end
+      end)
+    end
+
+    function sdk.ads_show_rewarded(placement, before_ad, after_ad, ad_dismissed, ad_viewed, no_fill)
+      if mock_config("mock_ad_result", "normal") == "nofill" then
+        print("[Yes2SDK] Mock: rewarded no-fill (placement: " .. tostring(placement) .. ")")
+        if no_fill then next_frame(function(tself) no_fill(tself, true) end) end
+        return
+      end
+      local dismissed = mock_config("mock_rewarded_result", "viewed") == "dismissed"
+      print("[Yes2SDK] Mock: rewarded ad playing " .. REWARDED_SECONDS .. "s (placement: " .. tostring(placement) .. ", result: " .. (dismissed and "dismissed" or "viewed") .. ")")
+      if before_ad then next_frame(function(tself) before_ad(tself, true) end) end
+      timer.delay(REWARDED_SECONDS, false, function(tself)
+        -- Same sequence the HTML5 bridge delivers; the wrapper's completion
+        -- latch settles on the first completion callback.
+        if dismissed then
+          print("[Yes2SDK] Mock: rewarded dismissed (no reward)")
+          if ad_dismissed then ad_dismissed(tself, true) end
+        else
+          print("[Yes2SDK] Mock: rewarded viewed (grant the reward)")
+          if ad_viewed then ad_viewed(tself, true) end
+        end
+        if after_ad then after_ad(tself, true) end
+      end)
+    end
+
+    function sdk.ads_is_rewarded_ad_available() return true end
+    function sdk.ads_is_interstitial_supported() return true end
+    function sdk.ads_is_rewarded_supported() return true end
+
+    -- IAP: sample catalog matching the Unity mock. Any product id can be
+    -- purchased (not just catalog entries) so games can test with their
+    -- real ids. Purchases last for the current session only.
+    local MOCK_PRODUCTS = {
+      { id = "yes2.mock.coins.small", json = '{"productId":"yes2.mock.coins.small","title":"Small Coin Pack","description":"Mock consumable product.","imageUri":"","price":"$0.99","priceCurrencyCode":"USD","priceAmount":99}' },
+      { id = "yes2.mock.coins.large", json = '{"productId":"yes2.mock.coins.large","title":"Large Coin Pack","description":"Mock consumable product.","imageUri":"","price":"$4.99","priceCurrencyCode":"USD","priceAmount":499}' },
+      { id = "yes2.mock.noads", json = '{"productId":"yes2.mock.noads","title":"Remove Ads","description":"Mock non-consumable product.","imageUri":"","price":"$2.99","priceCurrencyCode":"USD","priceAmount":299}' },
+    }
+    local mock_purchases = {}
+    local mock_payment_counter = 0
+
+    local function json_escape(value)
+      local out = tostring(value):gsub("\\", "\\\\"):gsub('"', '\\"')
+      return out
+    end
+
+    local function mock_purchase_json(product_id, developer_payload)
+      mock_payment_counter = mock_payment_counter + 1
+      local token = "mock-token-" .. tostring(os.time()) .. "-" .. tostring(mock_payment_counter)
+      local json = '{"purchaseToken":"' .. token
+        .. '","productId":"' .. json_escape(product_id)
+        .. '","paymentId":"mock-payment-' .. tostring(mock_payment_counter)
+        .. '","purchaseTime":"' .. os.date("!%Y-%m-%dT%H:%M:%SZ") .. '"'
+      if developer_payload and developer_payload ~= "" then
+        json = json .. ',"developerPayload":"' .. json_escape(developer_payload) .. '"'
+      end
+      return token, json .. "}"
+    end
+
+    function sdk.iap_is_supported() return true end
+
+    function sdk.iap_get_catalog(callback)
+      local parts = {}
+      for i, product in ipairs(MOCK_PRODUCTS) do parts[i] = product.json end
+      local catalog = "[" .. table.concat(parts, ",") .. "]"
+      if callback then next_frame(function(tself) callback(tself, true, catalog) end) end
+    end
+
+    function sdk.iap_get_product(product_id, callback)
+      local found = "null"
+      for _, product in ipairs(MOCK_PRODUCTS) do
+        if product.id == product_id then
+          found = product.json
+          break
+        end
+      end
+      if callback then next_frame(function(tself) callback(tself, true, found) end) end
+    end
+
+    function sdk.iap_purchase(product_id, developer_payload, callback)
+      if mock_config("mock_purchase_result", "success") == "fail" then
+        print("[Yes2SDK] Mock: iap_purchase('" .. tostring(product_id) .. "') failing (mock_purchase_result = fail)")
+        if callback then next_frame(function(tself) callback(tself, false, "Simulated purchase failure (mock)") end) end
+        return
+      end
+      local token, purchase = mock_purchase_json(tostring(product_id), developer_payload)
+      table.insert(mock_purchases, { token = token, json = purchase })
+      print("[Yes2SDK] Mock: iap_purchase('" .. tostring(product_id) .. "') succeeding (token: " .. token .. ")")
+      if callback then next_frame(function(tself) callback(tself, true, purchase) end) end
+    end
+
+    function sdk.iap_get_purchases(callback)
+      local parts = {}
+      for i, purchase in ipairs(mock_purchases) do parts[i] = purchase.json end
+      local purchases = "[" .. table.concat(parts, ",") .. "]"
+      if callback then next_frame(function(tself) callback(tself, true, purchases) end) end
+    end
+
+    function sdk.iap_consume_purchase(purchase_token, callback)
+      for i, purchase in ipairs(mock_purchases) do
+        if purchase.token == purchase_token then
+          table.remove(mock_purchases, i)
+          break
+        end
+      end
+      print("[Yes2SDK] Mock: iap_consume_purchase succeeded")
+      if callback then next_frame(function(tself) callback(tself, true, nil) end) end
+    end
+  end
 end
 
 -- True between any ads_show_* call and its after_ad / no_fill / dismissed completion.

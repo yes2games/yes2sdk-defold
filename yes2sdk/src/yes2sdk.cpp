@@ -20,7 +20,7 @@
 #define EXTENSION_NAME Yes2SDK
 #define LIB_NAME "Yes2SDK"
 #define MODULE_NAME "yes2sdk"
-#define VERSION "1.5.5"
+#define VERSION "1.6.0"
 
 #if defined(DM_PLATFORM_HTML5)
 
