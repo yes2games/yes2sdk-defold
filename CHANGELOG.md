@@ -4,6 +4,11 @@ All notable changes to Yes2SDK for Defold will be documented in this file.
 
 Format follows [Keep a Changelog](https://keepachangelog.com/). Versioning follows [Semantic Versioning](https://semver.org/).
 
+## [1.6.0] - 2026-07-17
+
+### Added
+- **Editor mock for init, ads, and IAP.** In the Defold editor (any non-HTML5 build), `yes2sdk.*` calls now run against a functional mock instead of silent no-ops, so integrations are testable without bundling. `initialize` and `start_game` succeed; `ads_show_interstitial` / `ads_show_rewarded` play a timed mock flow (3s / 5s, matching the Unity SDK's Play Mode mock) and then fire the full callback sequence, so `before_ad` / `after_ad` pause-resume wiring and the `ad_viewed` reward path behave like a real ad; IAP works end to end with a sample catalog, any-product-id purchases, a session purchase list, and consume support. Failure modes are selectable in `game.project` under `[yes2sdk]`: `mock_rewarded_result = dismissed` tests the no-reward path, `mock_ad_result = nofill` fails ads, `mock_purchase_result = fail` fails purchases, and `mock = 0` disables the mock entirely. Previously ad callbacks only fired via the 30s watchdog (`no_fill`) and IAP callbacks never fired at all, permanently latching `iap_purchase` for the session. HTML5 bundles are unaffected and keep the loud missing-extension warning.
+
 ## [1.5.5] - 2026-07-08
 
 ### Added

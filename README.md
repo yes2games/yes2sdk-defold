@@ -18,12 +18,12 @@ In your `game.project`, add:
 
 ```ini
 [project]
-dependencies#0 = https://github.com/yes2games/yes2sdk-defold/archive/refs/tags/v1.5.5.zip
+dependencies#0 = https://github.com/yes2games/yes2sdk-defold/archive/refs/tags/v1.6.0.zip
 ```
 
 Then in Defold Editor: **Project > Fetch Libraries**.
 
-> Pinning the URL with `tags/v1.5.5` keeps the resolved hash stable. Bump the tag when a newer release ships. **Don't use `/refs/heads/main.zip`** — branch archives are served less reliably by GitHub and `Fetch Libraries` fails intermittently.
+> Pinning the URL with `tags/v1.6.0` keeps the resolved hash stable. Bump the tag when a newer release ships. **Don't use `/refs/heads/main.zip`** — branch archives are served less reliably by GitHub and `Fetch Libraries` fails intermittently.
 
 ### Via Local Copy
 
@@ -348,7 +348,29 @@ The template automatically reports Defold's download progress to the loading scr
 
 ## Editor Testing
 
-The native extension is HTML5-only. In the Defold editor, all `yes2sdk.*` calls run against a no-op stub that prints a one-time warning and returns sensible defaults. To exercise real SDK behavior, build for HTML5 and run via *Bundle > HTML5 Application > Create Bundle*, or use the QA Inspector in the Yes2Games Dashboard for richer simulation (forced errors, specific locales, ad failure modes).
+The native extension is HTML5-only. In the Defold editor, `yes2sdk.*` calls run against a functional mock so you can test your integration without bundling:
+
+- `initialize` / `start_game` succeed on the next frame
+- **Ads play a timed mock flow** (3s interstitial, 5s rewarded) and then fire the full callback sequence, so pause-resume wiring in `before_ad` / `after_ad` and the reward path in `ad_viewed` are exercised like a real ad
+- **IAP works end to end**: `iap_is_supported()` returns true, `iap_get_catalog` returns a sample catalog, `iap_purchase` accepts any product id and resolves with a realistic purchase payload, and `iap_get_purchases` / `iap_consume_purchase` operate on a session purchase list
+- Other modules keep the one-time-warning stub with sensible defaults
+
+Configure the mock in `game.project` (all keys optional):
+
+```ini
+[yes2sdk]
+mock = 0
+mock_rewarded_result = dismissed
+mock_ad_result = nofill
+mock_purchase_result = fail
+```
+
+- `mock = 0` disables the mock entirely (old stub behavior). Default: enabled.
+- `mock_rewarded_result = dismissed` makes rewarded ads fire `ad_dismissed` (no-reward path). Default: `viewed`.
+- `mock_ad_result = nofill` makes ad calls fail with `no_fill`. Default: `normal`.
+- `mock_purchase_result = fail` makes `iap_purchase` fail. Default: `success`.
+
+The mock is editor/desktop only. HTML5 bundles always use the real platform SDK, and a missing extension in an HTML5 build still prints the loud bundling warning. For richer simulation (specific locales, network conditions), use the QA Inspector in the Yes2Games Dashboard.
 
 ---
 
@@ -374,7 +396,7 @@ Use a tagged release URL, not a branch archive. GitHub serves tagged archives mo
 
 ```ini
 # Good — tagged release
-dependencies#0 = https://github.com/yes2games/yes2sdk-defold/archive/refs/tags/v1.5.5.zip
+dependencies#0 = https://github.com/yes2games/yes2sdk-defold/archive/refs/tags/v1.6.0.zip
 
 # Bad — branch archive (intermittent failures)
 dependencies#0 = https://github.com/yes2games/yes2sdk-defold/archive/refs/heads/main.zip
