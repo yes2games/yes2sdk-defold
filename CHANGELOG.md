@@ -4,6 +4,12 @@ All notable changes to Yes2SDK for Defold will be documented in this file.
 
 Format follows [Keep a Changelog](https://keepachangelog.com/). Versioning follows [Semantic Versioning](https://semver.org/).
 
+## [1.6.1] - 2026-08-24
+
+### Fixed
+- **`after_ad` is now delivered when a rewarded ad is skipped.** `ad_dismissed` settled the in-flight ad request before delegating, so the `after_ad` that follows it was treated as a stale callback and swallowed. A player who dismissed a rewarded ad never got the resume callback, and the game stayed paused for the rest of the session. Only `after_ad` and `no_fill` are terminal now; `before_ad`, `ad_viewed`, and `ad_dismissed` report without settling. The claimed-reward path was unaffected.
+- **Omitting `before_ad`, `ad_viewed`, or `ad_dismissed` no longer kills the ad.** The native web binding type-checks every callback slot as a function, so passing `nil` raised inside the guarding `pcall`, which reported `no_fill` and showed no ad at all. All optional callbacks are wrapped before they reach the binding. The editor mock takes Lua callbacks directly and tolerates `nil`, so this only ever failed on a bundled HTML5 build.
+
 ## [1.6.0] - 2026-07-17
 
 ### Added
