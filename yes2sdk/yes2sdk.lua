@@ -344,6 +344,17 @@ local function _wrap_ad_completion(request, cb)
   end
 end
 
+local function _wrap_ad_outcome(cb)
+  -- Wrap an outcome callback (ad_viewed / ad_dismissed) so it delegates WITHOUT
+  -- settling the request. after_ad is the terminal event and follows both outcomes,
+  -- so settling here makes that after_ad look stale and swallows it, leaving the game
+  -- paused for the rest of the session. The native binding type-checks every callback
+  -- slot as a function, so an omitted callback still gets one.
+  return function(...)
+    if cb then cb(...) end
+  end
+end
+
 local function _reject_concurrent(callback_name)
   print("[Yes2SDK] " .. callback_name .. " rejected — another ad is already in flight (AdAlreadyShowing). Wait for after_ad/no_fill before calling Show* again.")
 end
@@ -386,8 +397,8 @@ function M.ads_show_rewarded(placement, before_ad, after_ad, ad_dismissed, ad_vi
     placement,
     before_ad,
     _wrap_ad_completion(request, after_ad),
-    _wrap_ad_completion(request, ad_dismissed),
-    ad_viewed,                              -- adViewed fires before afterAd; don't clear flag here
+    _wrap_ad_outcome(ad_dismissed),
+    _wrap_ad_outcome(ad_viewed),
     _wrap_ad_completion(request, no_fill)
   )
   if not ok and _clear_ad(request) then
