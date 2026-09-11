@@ -106,8 +106,11 @@ jobs:
         with:
           node-version: "22.x"
 
+      # Explicit file list, not the directory. Node 22 resolves a bare directory
+      # argument as a module path and dies with MODULE_NOT_FOUND; passing the
+      # suites works on every version, and it keeps helpers.mjs out of the run.
       - name: Run the ci/ test suites
-        run: node --test ci/test/
+        run: node --test ci/test/*.test.mjs
 
   web-js-syntax:
     name: Web JS syntax

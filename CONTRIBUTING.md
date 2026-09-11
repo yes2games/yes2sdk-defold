@@ -52,7 +52,7 @@ node ci/verify-workflow-governance.mjs
 node ci/verify-release-state.mjs
 node ci/sync-release-version.mjs --check
 node ci/check-web-js-syntax.mjs
-node --test ci/test/
+node --test ci/test/*.test.mjs
 ```
 
 To reproduce a Bob lane, read the pinned versions from `ci/defold-toolchain.json`,
