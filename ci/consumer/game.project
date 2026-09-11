@@ -1,0 +1,13 @@
+[project]
+title = yes2sdk-ci-consumer
+version = 0.0.0
+
+[bootstrap]
+main_collection = /main/main.collectionc
+
+[input]
+game_binding = /builtins/input/all.input_bindingc
+
+[display]
+width = 320
+height = 240

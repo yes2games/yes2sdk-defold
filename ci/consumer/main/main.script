@@ -1,0 +1,8 @@
+-- Smallest real consumer of the SDK: it requires the Lua wrapper and touches a
+-- native entry point, so the bundle fails if either the Lua module or the
+-- native extension symbols are missing. It never reaches a Yes2 backend.
+local yes2sdk_api = require "yes2sdk.yes2sdk"
+
+function init(self)
+  print("[yes2sdk-ci-consumer] platform=" .. tostring(yes2sdk_api.get_platform()))
+end
