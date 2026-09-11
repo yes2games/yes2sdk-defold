@@ -47,6 +47,10 @@ export function run(script, args, options = {}) {
             encoding: "utf8",
             stdio: ["ignore", "pipe", "pipe"],
             cwd: options.cwd ?? REPO_ROOT,
+            // `env` exists so a suite can put a stub ahead of a real binary on
+            // PATH - the only way to exercise a script that shells out to `gh`
+            // without a network, a token or a pull request.
+            env: options.env ?? process.env,
         });
         return { status: 0, stdout, stderr: "" };
     } catch (error) {
