@@ -23,7 +23,30 @@ dependencies#0 = https://github.com/yes2games/yes2sdk-defold/archive/refs/tags/v
 
 Then in Defold Editor: **Project > Fetch Libraries**.
 
-> Pinning the URL with `tags/v1.6.1` keeps the resolved hash stable. Bump the tag when a newer release ships. **Don't use `/refs/heads/main.zip`** — branch archives are served less reliably by GitHub and `Fetch Libraries` fails intermittently.
+> Pinning the URL to a `tags/vX.Y.Z` ref keeps the resolved hash stable. Bump the tag when a newer release ships. **Don't use `/refs/heads/main.zip`** — branch archives are served less reliably by GitHub and `Fetch Libraries` fails intermittently.
+
+### Channels
+
+Two dependency URLs, and nothing else is a channel:
+
+| Channel | Dependency URL | What it is |
+| --- | --- | --- |
+| production | `https://github.com/yes2games/yes2sdk-defold/archive/refs/tags/vX.Y.Z.zip` | An immutable release tag at an exact commit. Use this in a shipping game. |
+| integration | `https://github.com/yes2games/yes2sdk-defold/archive/refs/tags/edge.zip` | A mutable `edge` tag that moves to the newest commit on `main` that passed required CI. Use it to test against unreleased changes. |
+
+```ini
+# production — pin a release
+dependencies#0 = https://github.com/yes2games/yes2sdk-defold/archive/refs/tags/vX.Y.Z.zip
+
+# integration — track the tested tip of main
+dependencies#0 = https://github.com/yes2games/yes2sdk-defold/archive/refs/tags/edge.zip
+```
+
+`edge` is a Git tag and nothing more: there is no `edge` GitHub Release, no
+prerelease, and no `edge-X.Y.Z`. It moves, so the resolved hash changes under you
+and a stale Defold dependency cache can serve older bytes — re-fetch libraries
+after clearing `.internal/lib` if `edge` looks behind. Never ship a game against
+it.
 
 ### Via Local Copy
 
