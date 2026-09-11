@@ -7,6 +7,15 @@ builtins
 # Archives
 *.zip
 
+# CI scratch in the workspace: the release jobs download bob.jar and write a few
+# small API responses next to it. Nothing here is ever committed.
+/bob.jar
+/release-notes.md
+/pr.json
+/after.json
+/draft.json
+/published.json
+
 # OS
 .DS_Store
 Thumbs.db
