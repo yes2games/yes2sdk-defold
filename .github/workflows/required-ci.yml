@@ -92,6 +92,30 @@ jobs:
       - name: Assert every version mirror matches VERSION
         run: node ci/sync-release-version.mjs --check
 
+  dependency-archive:
+    name: Dependency archive
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22.x"
+
+      # The archive a consumer downloads is the product, and until now nothing
+      # checked that it was still resolvable as a Defold library. It was not: #33
+      # added ci/consumer/game.project, which sorts before the root game.project
+      # in git tree order, and Bob takes the first game.project it meets as the
+      # library root. The edge lane caught it, but only on push:main, after the
+      # tag had already moved. This runs on every pull request instead, offline,
+      # from `git archive HEAD` - no tag, no release, no network.
+      - name: Assert the dependency archive is resolvable as a library
+        run: node ci/verify-dependency-archive.mjs
+
   ci-tests:
     name: Projector and verifier tests
     runs-on: ubuntu-24.04
@@ -286,6 +310,7 @@ jobs:
       - workflow-governance
       - release-state
       - mirror-check
+      - dependency-archive
       - ci-tests
       - web-js-syntax
       - bob
