@@ -1030,22 +1030,16 @@ jobs:
           # whatever moved it (#29 section 3).
           git push origin "HEAD:refs/heads/$head_ref"
 
-          gh pr view "$number" --json state,baseRefName,headRefName,headRefOid > after.json
-          cat after.json
-          BASE="$base" HEAD_REF="$head_ref" PROJECTED="$projected" node -e '
-            const pr = require("./after.json");
-            const expected = {
-              state: "OPEN",
-              baseRefName: process.env.BASE,
-              headRefName: process.env.HEAD_REF,
-              headRefOid: process.env.PROJECTED,
-            };
-            const bad = Object.entries(expected).filter(([key, value]) => pr[key] !== value);
-            if (bad.length > 0) {
-              for (const [key, value] of bad) {
-                console.error(`after the push the release pull request ${key} is ${JSON.stringify(pr[key])}; expected ${JSON.stringify(value)}`);
-              }
-              process.exit(1);
-            }
-            console.log("the release pull request head is the projected commit, and its identity is unchanged");
-          '
+          # #29 section 3's post-push assertion, read so that it measures what it
+          # claims to. A single `gh pr view` here is a read-after-write against a
+          # value GitHub updates asynchronously, and it has already failed that
+          # way once on main: the push landed, the pull request read the projected
+          # commit moments later, and the step reported a projection mismatch that
+          # had not happened. The rule is unchanged - the read converges, and a
+          # third value on the ref is still a hard, immediate conflict.
+          node ci/verify-projected-head.mjs \
+            --number "$number" \
+            --ref "$head_ref" \
+            --base "$base" \
+            --expect "$projected" \
+            --from "$head_sha"
