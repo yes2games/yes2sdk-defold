@@ -140,6 +140,22 @@ test("both toolchain lanes carry a strict version and a full SHA-256", () => {
     assert.notEqual(toolchain.floor.bobSha256, toolchain.current.bobSha256);
 });
 
+test("the README's supported-Defold claim matches the floor lane", () => {
+    // The claim and the lane drifted once already, and in the direction that
+    // matters: the README promised Defold 1.6 while the build server refuses to
+    // compile a native extension for anything below the floor lane's version. This
+    // SDK *is* a native extension, so an unbuildable floor is a false promise, not
+    // an untested one - and CI is the only thing that knows the real number.
+    const floor = JSON.parse(source("ci/defold-toolchain.json")).floor.defoldVersion;
+    const readme = source("README.md");
+
+    assert.match(readme, new RegExp(`img\\.shields\\.io/badge/Defold-${floor.replace(/\./g, "\\.")}%2B-`), "the Defold badge names a different version than the floor lane");
+    assert.match(readme, new RegExp(`^- Defold ${floor.replace(/\./g, "\\.")} or newer`, "m"), "the Requirements bullet names a different version than the floor lane");
+
+    // The SDK's own release tag reads like a Defold version and is not one.
+    assert.match(readme, /archive\/refs\/tags\/v\d+\.\d+\.\d+\.zip/, "the production dependency tag is this SDK's version, and is left alone");
+});
+
 test("required CI triggers on unfiltered pull_request and push:main, with no path filter", () => {
     const text = source(".github/workflows/required-ci.yml");
     const on = /^on:\n([\s\S]*?)\n[a-z]/m.exec(text)[1];
