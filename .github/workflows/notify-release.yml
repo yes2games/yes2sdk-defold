@@ -1,41 +1,58 @@
 name: Notify Google Chat on Release
 
+# Woken explicitly, never by a release event. A Release published with
+# GITHUB_TOKEN - which is how the stable job in required-ci.yml publishes it -
+# fires no `release: published` event at all, so the trigger this workflow used to
+# carry would simply stop firing the moment the release job landed: silently, with
+# no failed run to notice, because a trigger that never fires produces nothing.
+# yes2games/yes2dashboard#141 names that outcome as a thing no consumer may depend
+# on, and yes2games/yes2sdk-defold#29 section 13 says the handoff must be an
+# explicit repository_dispatch. The notifier keeps its semantics - published stable
+# only, read-only, no mutation credential - and changes only how it is woken.
+
 on:
-  release:
-    types: [published]
+  repository_dispatch:
+    types: [yes2sdk-defold-stable-published]
+
+# Explicit and empty: this workflow reads nothing from the repository and writes
+# nothing to it. It needs the webhook secret and no repository access at all, and
+# the default token scope is not something to inherit by accident
+# (#29 sections 14 and 15).
+permissions: {}
 
 jobs:
   notify:
-    runs-on: ubuntu-latest
+    # Explicit runner class, spelled out. `ubuntu-latest` is a floating label that
+    # GitHub moves between images on its own schedule (#141 section 8 guard 1).
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
     steps:
       - name: Send Google Chat notification
         env:
           WEBHOOK_URL: ${{ secrets.GCHAT_WEBHOOK_URL }}
           REPO: ${{ github.repository }}
-          TAG: ${{ github.event.release.tag_name }}
-          NAME: ${{ github.event.release.name }}
-          URL: ${{ github.event.release.html_url }}
-          AUTHOR: ${{ github.event.release.author.login }}
-          BODY: ${{ github.event.release.body }}
-          PRERELEASE: ${{ github.event.release.prerelease }}
+          TAG: ${{ github.event.client_payload.tag }}
+          VERSION: ${{ github.event.client_payload.sdkVersion }}
+          SOURCE_COMMIT: ${{ github.event.client_payload.sourceCommit }}
+          RUN_ID: ${{ github.event.client_payload.runId }}
         run: |
           set -euo pipefail
 
-          BODY_TRUNC=$(printf '%s' "${BODY:-_(no release notes)_}" | head -c 1500)
-          DISPLAY_NAME="${NAME:-$TAG}"
-          STATUS_LABEL="Stable Release"
-          if [ "$PRERELEASE" = "true" ]; then
-            STATUS_LABEL="Pre-release"
+          if [ -z "${TAG:-}" ] || [ -z "${VERSION:-}" ] || [ -z "${SOURCE_COMMIT:-}" ]; then
+            echo "the dispatch payload is missing tag, sdkVersion or sourceCommit" >&2
+            exit 1
           fi
 
+          URL="https://github.com/${REPO}/releases/tag/${TAG}"
+          RUN_URL="https://github.com/${REPO}/actions/runs/${RUN_ID}"
+
           jq -n \
-            --arg repo       "$REPO" \
-            --arg tag        "$TAG" \
-            --arg name       "$DISPLAY_NAME" \
-            --arg url        "$URL" \
-            --arg author     "$AUTHOR" \
-            --arg body       "$BODY_TRUNC" \
-            --arg status     "$STATUS_LABEL" \
+            --arg repo    "$REPO" \
+            --arg tag     "$TAG" \
+            --arg version "$VERSION" \
+            --arg commit  "$SOURCE_COMMIT" \
+            --arg url     "$URL" \
+            --arg run     "$RUN_URL" \
             '{
               cardsV2: [{
                 cardId: "release-card",
@@ -48,13 +65,15 @@ jobs:
                   },
                   sections: [{
                     widgets: [
-                      { decoratedText: { topLabel: "Release",  text: $name } },
-                      { decoratedText: { topLabel: "Status",   text: $status } },
-                      { decoratedText: { topLabel: "Author",   text: $author } },
-                      { textParagraph:  { text: $body } },
+                      { decoratedText: { topLabel: "Release", text: $tag } },
+                      { decoratedText: { topLabel: "Status",  text: "Stable Release" } },
+                      { decoratedText: { topLabel: "SDK version", text: $version } },
+                      { decoratedText: { topLabel: "Source commit", text: $commit } },
                       { buttonList: { buttons: [
-                        { text: "View on GitHub",
-                          onClick: { openLink: { url: $url } } }
+                        { text: "View release",
+                          onClick: { openLink: { url: $url } } },
+                        { text: "View run",
+                          onClick: { openLink: { url: $run } } }
                       ] } }
                     ]
                   }]

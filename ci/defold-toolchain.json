@@ -1,0 +1,19 @@
+{
+  "note": "The floor lane is pinned to the oldest Defold version build.defold.com, Defold's hosted extension build server, still compiles native extensions for. yes2games/yes2sdk-defold#29 sections 5 and 9 pin 1.6.0, and 1.6.0 is not buildable: the extender answers HTTP 501 'Engine version d9e9c49ab946c058f29a8b688c862d70f30e9c43 is not supported on the current server'. Measured by probing POST /build_async/<platform>/<engine sha> once per version on 2026-09-11: 1.6.0 through 1.10.1 refused, 1.10.2 and 1.10.3 accepted on js-web, 1.10.4 and newer accepted on wasm-web. This is not merely the floor CI can exercise - it is the floor the SDK has, because the SDK is a native extension and a native extension is built by that server, so a user on an older Defold cannot build against this package at all. README's support claim was corrected to match rather than left alone. The floor belongs to the hosted server rather than to the engine: Defold still publishes the 1.6.0 SDK archives at d.defold.com, and the refusal comes from defoldSdkService.getPlatformSdkMappings failing on that deployment (defold/extender ExtenderController.java), so a self-hosted extender may build further back. Defold prunes old SDKs as new versions ship, so this pin goes red when 1.10.2 ages out and is then raised, never lowered.",
+  "floor": {
+    "defoldVersion": "1.10.2",
+    "javaMajor": 21,
+    "platform": "js-web",
+    "architectures": "wasm-web",
+    "bobAsset": "bob.jar",
+    "bobSha256": "7a69a63a91767fa6dd89d360f2b6fc418ec3a39d2c25681c6f0d7cbef2700b8c"
+  },
+  "current": {
+    "defoldVersion": "1.13.1",
+    "javaMajor": 25,
+    "platform": "wasm-web",
+    "architectures": null,
+    "bobAsset": "bob.jar",
+    "bobSha256": "8f2b1381fd4d0fb92816403cd0056cb7db5ad4083615be8dcc2d868fb4939938"
+  }
+}

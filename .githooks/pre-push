@@ -1,0 +1,35 @@
+#!/usr/bin/env bash
+set -Eeuo pipefail
+# Advisory guard, NOT enforcement. It fires only in a clone that has run
+# 'git config core.hooksPath .githooks' (see CONTRIBUTING.md), and
+# 'git push --no-verify' bypasses it outright. Nothing protects the default
+# branch on the server: this organization uses no branch protection, no
+# rulesets and no CODEOWNERS enforcement on any SDK, including the public
+# ones, by deliberate decision (yes2games/yes2dashboard#141 sections 3 and 14).
+# Do not read a green checklist and believe main is protected.
+
+# Both lookups may legitimately find nothing, and `|| true` is what lets them.
+# Under `set -e` an assignment inherits the exit status of its command
+# substitution, so a failing lookup killed this hook before the fallback below
+# could run - and it then refused every push, including pushes that have
+# nothing to do with the default branch. `git clone` writes
+# refs/remotes/origin/HEAD, but actions/checkout does not, so the shape that
+# tripped it is every CI checkout (yes2games/yes2sdk-core#59).
+default_branch=$(git symbolic-ref --short refs/remotes/origin/HEAD 2>/dev/null | sed 's#^origin/##' || true)
+if [ -z "$default_branch" ]; then
+  default_branch=$(git ls-remote --symref origin HEAD 2>/dev/null |
+    awk '$1 == "ref:" { sub("refs/heads/", "", $2); print $2; exit }' || true)
+fi
+# Read from git rather than hardcoded, so renaming the default branch cannot
+# silently disarm the guard (#141 section 3).
+default_branch=${default_branch:-main}
+protected="refs/heads/${default_branch}"
+
+while read -r _ _ remote_ref _; do
+  if [ "$remote_ref" = "$protected" ]; then
+    echo "pre-push: direct push to '${default_branch}' is blocked; push a branch and open a PR instead (bypass: --no-verify)." >&2
+    exit 1
+  fi
+done
+
+exit 0

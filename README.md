@@ -1,13 +1,15 @@
 # Yes2SDK for Defold
 
 [![Version](https://img.shields.io/github/v/tag/yes2games/yes2sdk-defold?label=version)](https://github.com/yes2games/yes2sdk-defold/releases)
-[![Defold](https://img.shields.io/badge/Defold-1.6%2B-blue)](https://defold.com/)
+[![Defold](https://img.shields.io/badge/Defold-1.10.2%2B-blue)](https://defold.com/)
 
 A single SDK for your Defold HTML5 game. Integrate once against Yes2SDK, submit through the Yes2Games Dashboard, and the Yes2Games team handles the rest.
 
 ## Requirements
 
-- Defold 1.6 or newer
+- Defold 1.10.2 or newer — the oldest version `build.defold.com`, Defold's hosted extension build server, still compiles native extensions for. This SDK *is* a native extension, so on an older Defold the bundle fails at the build server with `HTTP 501 — Engine version '<sha>' is not supported on the current server`, whatever else your project does.
+
+  Do not lower this number without first checking that the hosted server accepts the older SDK again. Defold prunes old SDKs from that server as new versions ship, so this floor moves up over time and never down. It is a floor of the hosted server rather than of the engine: Defold still publishes the older SDK archives, so a self-hosted extender may well build further back — untested here, and not something this SDK promises.
 - HTML5 build target (the extension is HTML5-only — non-HTML5 platforms get a warn-and-no-op stub)
 
 ## Installation
@@ -23,7 +25,30 @@ dependencies#0 = https://github.com/yes2games/yes2sdk-defold/archive/refs/tags/v
 
 Then in Defold Editor: **Project > Fetch Libraries**.
 
-> Pinning the URL with `tags/v1.6.1` keeps the resolved hash stable. Bump the tag when a newer release ships. **Don't use `/refs/heads/main.zip`** — branch archives are served less reliably by GitHub and `Fetch Libraries` fails intermittently.
+> Pinning the URL to a `tags/vX.Y.Z` ref keeps the resolved hash stable. Bump the tag when a newer release ships. **Don't use `/refs/heads/main.zip`** — branch archives are served less reliably by GitHub and `Fetch Libraries` fails intermittently.
+
+### Channels
+
+Two dependency URLs, and nothing else is a channel:
+
+| Channel | Dependency URL | What it is |
+| --- | --- | --- |
+| production | `https://github.com/yes2games/yes2sdk-defold/archive/refs/tags/vX.Y.Z.zip` | An immutable release tag at an exact commit. Use this in a shipping game. |
+| integration | `https://github.com/yes2games/yes2sdk-defold/archive/refs/tags/edge.zip` | A mutable `edge` tag that moves to the newest commit on `main` that passed required CI. Use it to test against unreleased changes. |
+
+```ini
+# production — pin a release
+dependencies#0 = https://github.com/yes2games/yes2sdk-defold/archive/refs/tags/vX.Y.Z.zip
+
+# integration — track the tested tip of main
+dependencies#0 = https://github.com/yes2games/yes2sdk-defold/archive/refs/tags/edge.zip
+```
+
+`edge` is a Git tag and nothing more: there is no `edge` GitHub Release, no
+prerelease, and no `edge-X.Y.Z`. It moves, so the resolved hash changes under you
+and a stale Defold dependency cache can serve older bytes — re-fetch libraries
+after clearing `.internal/lib` if `edge` looks behind. Never ship a game against
+it.
 
 ### Via Local Copy
 

@@ -1,0 +1,1026 @@
+name: YES2 Defold Required CI Workflow
+
+# yes2games/yes2sdk-defold#29 and yes2games/yes2dashboard#141 v2.
+#
+# Unfiltered pull_request and push:main, no path filter. In #141 v1 the push:main
+# trigger produced a proof artifact for an external mutator; in v2 the release
+# itself happens here, at the merge commit it releases, so the trigger is not
+# optional and cannot be narrowed.
+#
+# Every job is pinned to ubuntu-24.04, spelled out. This repository is public, so
+# GitHub-hosted minutes are free and hosted runners are correct here - unlike the
+# private SDK repositories, where minutes are billed and jobs run self-hosted. Do
+# not copy their `fromJson(vars.RUNNER_HOST && ...)` expression in: it would
+# resolve to ubuntu-24.04 only by accident, through a fallback, and setting
+# RUNNER_HOST on this repository later would silently migrate every job onto
+# machines it has no entitlement to. What #29 section 12 guard 1 and #141 section 8
+# guard 1 require is that the class be explicit, and `ubuntu-latest` is a floating
+# label that GitHub moves between images on its own schedule - which is exactly
+# the "built on a different machine class than the determinism check assumes"
+# failure those guards name.
+#
+# This repository is public, so a pull request from a fork receives no secrets and
+# a read-only token. Every mandatory result below is therefore credential-free, by
+# construction and not by convention: an outside contributor's PR has to be able
+# to reach green. Never add a secret to a job that runs on pull_request.
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+
+permissions:
+  contents: read
+
+jobs:
+  workflow-governance:
+    name: Workflow governance
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22.x"
+
+      - name: Verify canonical workflow and final-gate identities
+        run: node ci/verify-workflow-governance.mjs
+
+  release-state:
+    name: Release state
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22.x"
+
+      - name: Verify the SemVer authority and the Release Please contract
+        run: node ci/verify-release-state.mjs
+
+  mirror-check:
+    name: Version mirror check
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22.x"
+
+      # Its own mandatory result, because it is what makes #29 section 4's
+      # relocation work: a release pull request whose mirrors are stale cannot
+      # reach green, so it cannot be merged. That blocks the bad merge rather than
+      # annotating it after the fact.
+      - name: Assert every version mirror matches VERSION
+        run: node ci/sync-release-version.mjs --check
+
+  ci-tests:
+    name: Projector and verifier tests
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22.x"
+
+      # Explicit file list, not the directory. Node 22 resolves a bare directory
+      # argument as a module path and dies with MODULE_NOT_FOUND; passing the
+      # suites works on every version, and it keeps helpers.mjs out of the run.
+      - name: Run the ci/ test suites
+        run: node --test ci/test/*.test.mjs
+
+  web-js-syntax:
+    name: Web JS syntax
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22.x"
+
+      - name: Syntax check every tracked yes2sdk/lib/web/*.js
+        run: node ci/check-web-js-syntax.mjs
+
+  bob:
+    name: Bob ${{ matrix.lane }} (Defold ${{ matrix.defold }} / Java ${{ matrix.java }})
+    runs-on: ubuntu-24.04
+    # Two bob.jar downloads of ~150-210 MB, two full dependency resolves and two
+    # extender round trips, with no cache carried between jobs.
+    timeout-minutes: 45
+
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # Kept in step with ci/defold-toolchain.json, which is the record of
+          # record - the digest is verified against it below rather than against
+          # these literals, so a matrix edit alone cannot change what executes.
+          - lane: floor
+            defold: "1.10.2"
+            java: "21"
+          - lane: current
+            defold: "1.13.1"
+            java: "25"
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22.x"
+
+      - name: Setup OpenJDK ${{ matrix.java }}
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: ${{ matrix.java }}
+
+      - name: Read the locked lane from ci/defold-toolchain.json
+        id: lane
+        env:
+          LANE: ${{ matrix.lane }}
+          MATRIX_DEFOLD: ${{ matrix.defold }}
+          MATRIX_JAVA: ${{ matrix.java }}
+        run: |
+          set -euo pipefail
+
+          # The matrix and the toolchain file must agree, or the job would download
+          # one version and report another.
+          for key in defoldVersion javaMajor platform architectures bobAsset bobSha256; do
+            value=$(jq -r --arg lane "$LANE" --arg key "$key" '.[$lane][$key] // "null"' ci/defold-toolchain.json)
+            echo "$key=$value" >> "$GITHUB_OUTPUT"
+            echo "$key=$value"
+          done
+
+          locked_defold=$(jq -r --arg lane "$LANE" '.[$lane].defoldVersion' ci/defold-toolchain.json)
+          locked_java=$(jq -r --arg lane "$LANE" '.[$lane].javaMajor' ci/defold-toolchain.json)
+          if [ "$locked_defold" != "$MATRIX_DEFOLD" ] || [ "$locked_java" != "$MATRIX_JAVA" ]; then
+            echo "the $LANE matrix entry is Defold $MATRIX_DEFOLD / Java $MATRIX_JAVA, but" >&2
+            echo "ci/defold-toolchain.json locks Defold $locked_defold / Java $locked_java." >&2
+            echo "A toolchain change is a reviewed edit to that file, not a matrix tweak." >&2
+            exit 1
+          fi
+
+      - name: Download bob.jar and verify the locked SHA-256 before any Java runs
+        env:
+          DEFOLD: ${{ steps.lane.outputs.defoldVersion }}
+          ASSET: ${{ steps.lane.outputs.bobAsset }}
+          EXPECTED: ${{ steps.lane.outputs.bobSha256 }}
+        run: |
+          set -euo pipefail
+          curl -sSL --fail-with-body -o bob.jar \
+            "https://github.com/defold/defold/releases/download/${DEFOLD}/${ASSET}"
+
+          actual=$(sha256sum bob.jar | cut -d' ' -f1)
+          if [ "$actual" != "$EXPECTED" ]; then
+            echo "bob.jar for Defold ${DEFOLD} hashes to $actual; ci/defold-toolchain.json locks $EXPECTED." >&2
+            echo "Refusing to execute it. A version or digest change requires a reviewed toolchain update." >&2
+            rm -f bob.jar
+            exit 1
+          fi
+          echo "bob.jar verified: $actual"
+
+      - name: Stage the ephemeral consumer from this checkout
+        run: |
+          set -euo pipefail
+          node ci/stage-source-consumer.mjs --out "$RUNNER_TEMP/consumer" --from-source
+
+          # The staging script writes nothing inside the repository; this is what
+          # says so out loud, because a lane that dirtied the tracked tree would
+          # change what the mirror check already passed on. Tracked files only:
+          # bob.jar sits in the workspace and is untracked by design.
+          git diff --exit-code
+          git diff --cached --exit-code
+          test -z "$(git status --porcelain --untracked-files=no)"
+
+      - name: Resolve, build and bundle HTML5
+        env:
+          PLATFORM: ${{ steps.lane.outputs.platform }}
+          ARCHITECTURES: ${{ steps.lane.outputs.architectures }}
+        run: |
+          set -euo pipefail
+          args=(--archive --platform "$PLATFORM")
+          if [ "$ARCHITECTURES" != "null" ]; then
+            args+=(--architectures "$ARCHITECTURES")
+          fi
+
+          cd "$RUNNER_TEMP/consumer"
+          java -jar "$GITHUB_WORKSPACE/bob.jar" "${args[@]}" resolve distclean build bundle
+
+      - name: Require a non-empty HTML5 bundle
+        run: |
+          set -euo pipefail
+          bundle=$(find "$RUNNER_TEMP/consumer/build" -name index.html -printf '%h\n' | head -1)
+          if [ -z "$bundle" ]; then
+            echo "the bundle produced no index.html" >&2
+            find "$RUNNER_TEMP/consumer/build" -maxdepth 3 >&2 || true
+            exit 1
+          fi
+
+          for pattern in 'index.html' '*.wasm' '*_wasm.js'; do
+            match=$(find "$bundle" -maxdepth 1 -name "$pattern" -size +0 | head -1)
+            if [ -z "$match" ]; then
+              echo "the bundle at $bundle has no non-empty $pattern" >&2
+              ls -la "$bundle" >&2
+              exit 1
+            fi
+            echo "ok $(basename "$match") $(stat -c%s "$match") bytes"
+          done
+
+      # #29 section 14: diagnostics record the resolved ref and SHA, the SDK
+      # SemVer, the channel, the Defold/Bob version and the Java major.
+      - name: Record the lane diagnostics
+        if: always()
+        env:
+          LANE: ${{ matrix.lane }}
+          DEFOLD: ${{ matrix.defold }}
+          JAVA: ${{ matrix.java }}
+        run: |
+          {
+            echo "### Bob $LANE lane"
+            echo ""
+            echo "| field | value |"
+            echo "| --- | --- |"
+            echo "| channel | source (pre-release verification) |"
+            echo "| ref | ${GITHUB_REF} |"
+            echo "| sha | ${GITHUB_SHA} |"
+            echo "| SDK VERSION | $(cat VERSION) |"
+            echo "| Defold/Bob | ${DEFOLD} |"
+            echo "| Java major | ${JAVA} |"
+            echo "| runner | ubuntu-24.04 |"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  required-ci:
+    name: YES2 Defold Required CI
+    needs:
+      - workflow-governance
+      - release-state
+      - mirror-check
+      - ci-tests
+      - web-js-syntax
+      - bob
+    if: always()
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions: {}
+
+    steps:
+      - name: Assert every mandatory result is an exact success
+        env:
+          MANDATORY_RESULTS: ${{ toJSON(needs) }}
+        run: |
+          node -e '
+            const needs = JSON.parse(process.env.MANDATORY_RESULTS);
+            const entries = Object.entries(needs);
+            if (entries.length === 0) {
+              console.error("the final gate depends on no mandatory job");
+              process.exit(1);
+            }
+            for (const [job, outcome] of entries) {
+              console.log(`${outcome.result === "success" ? "ok  " : "FAIL"} ${job}: ${outcome.result}`);
+            }
+            const bad = entries.filter(([, outcome]) => outcome.result !== "success");
+            if (bad.length > 0) {
+              console.error(`${bad.length} of ${entries.length} mandatory results are not an exact success`);
+              process.exit(1);
+            }
+            console.log(`all ${entries.length} mandatory results succeeded`);
+          '
+
+  # ---------------------------------------------------------------------------
+  # Release. Everything below runs only on push:main, only in this same workflow
+  # run, and only when the final gate above is an exact success (#29 section 10,
+  # #141 section 5). There is no run to look up and no window in which main can
+  # move between the proof and the mutation: the release is standing on the merge
+  # commit it releases.
+  # ---------------------------------------------------------------------------
+
+  edge:
+    name: Edge tag
+    needs: [required-ci]
+    if: github.ref == 'refs/heads/main' && needs.required-ci.result == 'success'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+
+    # The workflow-level group already queues main runs behind each other, but the
+    # release half states its own serialization rather than inheriting it, so a
+    # later change to the workflow-level group cannot quietly let two merges tag at
+    # once (#29 section 10, #141 section 13 item 3).
+    concurrency:
+      group: yes2-defold-release
+      cancel-in-progress: false
+
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          # Full history and tags: the ancestry guard has to reason about whatever
+          # edge points at today, and a shallow clone cannot answer that.
+          fetch-depth: 0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22.x"
+
+      - name: Setup OpenJDK for the current lane
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "25"
+
+      - name: Move the edge tag to github.sha
+        env:
+          SDK_COMMIT: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+
+          current=$(git ls-remote origin refs/tags/edge | cut -f1)
+
+          # Fetch what edge points at before reasoning about it: a divergent edge
+          # is exactly the case whose commit is not reachable from main, so the
+          # ancestry test would otherwise fail on a missing object rather than on
+          # the divergence it exists to catch.
+          if [ -n "$current" ]; then
+            git fetch --force origin "+refs/tags/edge:refs/tags/edge"
+            if ! git cat-file -e "$current^{commit}" 2>/dev/null; then
+              echo "edge points at $current, which this checkout cannot resolve; refusing to move it." >&2
+              exit 1
+            fi
+          fi
+
+          if [ -z "$current" ]; then
+            echo "edge is absent; creating it at $SDK_COMMIT"
+          elif [ "$current" = "$SDK_COMMIT" ]; then
+            echo "edge is already $SDK_COMMIT"
+          elif git merge-base --is-ancestor "$current" "$SDK_COMMIT"; then
+            echo "edge moves forward: $current -> $SDK_COMMIT"
+          else
+            echo "edge is $current, which is neither $SDK_COMMIT nor an ancestor of it." >&2
+            echo "That is a divergent or regressing edge; refusing to move it." >&2
+            exit 1
+          fi
+
+          # A tag created with GITHUB_TOKEN triggers no workflow, which for edge is
+          # what we want (#141 section 4). There is no Release and no prerelease:
+          # edge is a Git tag and nothing else (#29 section 11).
+          git tag --force edge "$SDK_COMMIT"
+          git push --force origin refs/tags/edge
+
+      - name: Re-fetch edge and require equality with github.sha
+        env:
+          SDK_COMMIT: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          moved=$(git ls-remote origin refs/tags/edge | cut -f1)
+          if [ "$moved" != "$SDK_COMMIT" ]; then
+            echo "edge is $moved after the push; expected $SDK_COMMIT" >&2
+            exit 1
+          fi
+          echo "edge verified at $moved"
+
+      - name: Require edge to carry no Release and no prerelease
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          if gh release view edge --json tagName >/dev/null 2>&1; then
+            echo "a GitHub Release exists for the edge tag; edge is tag-only (#29 section 11)." >&2
+            exit 1
+          fi
+          count=$(gh release list --limit 200 --json isPrerelease --jq '[.[] | select(.isPrerelease)] | length')
+          if [ "$count" != "0" ]; then
+            echo "$count prerelease(s) exist; this contract has no prerelease channel (#141 section 9)." >&2
+            exit 1
+          fi
+          echo "edge is tag-only: no Release, no prerelease"
+
+      - name: Verify the edge archive is exactly github.sha, then build it
+        env:
+          SDK_COMMIT: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          cd "$RUNNER_TEMP"
+          rm -rf edge-archive && mkdir edge-archive && cd edge-archive
+
+          # A Defold dependency archive contains no commit identity - no .git, no
+          # SHA file, nothing naming the commit. VERSION is identical across every
+          # commit between releases, so matching it would prove nothing about which
+          # commit edge names. What the archive *is* is byte-identical to
+          # `git archive <ref>`, so the identity check is a tree comparison against
+          # a locally produced archive of github.sha (#29 sections 11 and 15).
+          curl -sSL --fail-with-body -o edge.zip \
+            "https://github.com/$GITHUB_REPOSITORY/archive/refs/tags/edge.zip"
+          unzip -q edge.zip
+          git -C "$GITHUB_WORKSPACE" archive --prefix=expected/ "$SDK_COMMIT" | tar x
+
+          # The archive's top-level directory is named from the ref, not the
+          # commit, so edge.zip always unpacks to <repo>-edge/.
+          diff -r "$(basename "$GITHUB_REPOSITORY")-edge" expected
+          echo "the edge archive is byte-identical to git archive $SDK_COMMIT"
+
+      - name: Clean current-lane consumer builds the edge archive
+        env:
+          SDK_COMMIT: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+
+          EXPECTED=$(jq -r '.current.bobSha256' ci/defold-toolchain.json)
+          DEFOLD=$(jq -r '.current.defoldVersion' ci/defold-toolchain.json)
+          PLATFORM=$(jq -r '.current.platform' ci/defold-toolchain.json)
+          curl -sSL --fail-with-body -o bob.jar \
+            "https://github.com/defold/defold/releases/download/${DEFOLD}/bob.jar"
+          actual=$(sha256sum bob.jar | cut -d' ' -f1)
+          if [ "$actual" != "$EXPECTED" ]; then
+            echo "bob.jar for Defold ${DEFOLD} hashes to $actual; locked $EXPECTED. Refusing to execute it." >&2
+            exit 1
+          fi
+
+          # A fresh directory per run, so no resolved dependency under
+          # <project>/.internal/lib can satisfy this download from a previous run.
+          node ci/stage-source-consumer.mjs --out "$RUNNER_TEMP/edge-consumer" \
+            --dependency "https://github.com/$GITHUB_REPOSITORY/archive/refs/tags/edge.zip"
+
+          cd "$RUNNER_TEMP/edge-consumer"
+          java -jar "$GITHUB_WORKSPACE/bob.jar" --archive --platform "$PLATFORM" resolve distclean build bundle
+
+          bundle=$(find build -name index.html -printf '%h\n' | head -1)
+          test -n "$bundle"
+          test -s "$bundle/index.html"
+          find "$bundle" -maxdepth 1 -name '*.wasm' -size +0 | grep -q .
+          echo "edge consumer bundled from $bundle"
+
+      - name: Record the edge diagnostics
+        if: always()
+        run: |
+          {
+            echo "### Edge"
+            echo ""
+            echo "| field | value |"
+            echo "| --- | --- |"
+            echo "| channel | edge |"
+            echo "| ref | ${GITHUB_REF} |"
+            echo "| sha | ${GITHUB_SHA} |"
+            echo "| SDK VERSION | $(cat VERSION) |"
+            echo "| Defold/Bob | $(jq -r '.current.defoldVersion' ci/defold-toolchain.json) |"
+            echo "| Java major | $(jq -r '.current.javaMajor' ci/defold-toolchain.json) |"
+            echo "| runner | ubuntu-24.04 |"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  stable:
+    name: Stable release
+    needs: [required-ci, edge]
+    if: github.ref == 'refs/heads/main' && needs.required-ci.result == 'success' && needs.edge.result == 'success'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+
+    concurrency:
+      group: yes2-defold-release
+      cancel-in-progress: false
+
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22.x"
+
+      - name: Setup OpenJDK for the current lane
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "25"
+
+      - name: Derive V and require a CHANGELOG section for it
+        id: version
+        run: |
+          set -euo pipefail
+
+          # Every mirror and the CHANGELOG are verified at github.sha, before any
+          # mutation (#29 section 13).
+          node ci/verify-release-state.mjs
+          node ci/sync-release-version.mjs --check
+
+          V=$(cat VERSION)
+
+          # Unconditional, and before the pending decision: a bump that reached
+          # main outside a release PR has to fail loudly here rather than sit
+          # undetected until someone wonders why no release exists. v1.6.0 in this
+          # repository is exactly that shape - it points at a one-line LICENSE typo
+          # fix while the 1.6.0 bump sits in the previous commit (#29 section 12).
+          node ci/verify-changelog-section.mjs --version "$V" --out release-notes.md
+
+          echo "value=$V" >> "$GITHUB_OUTPUT"
+
+      - name: Decide whether stable finalization is pending
+        id: plan
+        env:
+          V: ${{ steps.version.outputs.value }}
+        run: |
+          set -euo pipefail
+
+          # Vstable is the newest vX.Y.Z tag on the remote. This job is the only
+          # thing that creates one, so after the first canonical release the tag
+          # set and the published-release set are the same thing; before it, the
+          # newest tag is the historical baseline #141 bootstrap step 5 says to
+          # reconcile to, which is v1.6.1. Never guess it.
+          latest=$(git ls-remote --tags origin 'refs/tags/v*' \
+            | sed 's#.*refs/tags/##' \
+            | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' \
+            | sed 's/^v//' \
+            | sort -V | tail -1)
+
+          if [ -z "$latest" ]; then
+            echo "no vX.Y.Z tag exists on the remote, so there is no stable baseline to compare against." >&2
+            echo "Reconcile the baseline before letting the stable path run (#141 bootstrap step 5)." >&2
+            exit 1
+          fi
+
+          echo "Vsource=$V  Vstable=$latest"
+
+          if [ "$V" = "$latest" ]; then
+            echo "nothing to finalize: main already carries the newest stable"
+            echo "pending=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          greatest=$(printf '%s\n%s\n' "$V" "$latest" | sort -V | tail -1)
+          if [ "$greatest" != "$V" ]; then
+            echo "VERSION $V is behind the newest stable $latest; failing closed (#141 section 6)." >&2
+            exit 1
+          fi
+
+          echo "pending=true" >> "$GITHUB_OUTPUT"
+
+      - name: Require a usable gh on this runner
+        if: steps.plan.outputs.pending == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          # Checked before anything is drafted or published. gh ships preinstalled
+          # on ubuntu-24.04, so the only way this breaks is GitHub changing the
+          # image - on GitHub's schedule, not ours - and the failure has to land
+          # before the publish, which is the one step with no way back.
+          if ! command -v gh >/dev/null 2>&1; then
+            echo "gh is not installed on this runner, and the stable path cannot draft or publish without it." >&2
+            exit 1
+          fi
+          gh --version
+          gh auth status
+
+      - name: Require the stable tag to be absent
+        if: steps.plan.outputs.pending == 'true'
+        env:
+          V: ${{ steps.version.outputs.value }}
+        run: |
+          set -euo pipefail
+          if [ -n "$(git ls-remote --tags origin "refs/tags/v$V")" ]; then
+            echo "v$V already exists on the remote; a published stable is never rewritten." >&2
+            echo "Bad content requires a new SemVer (#29 section 13)." >&2
+            exit 1
+          fi
+          echo "v$V is absent, as required before drafting"
+
+      - name: Create the draft release at github.sha
+        if: steps.plan.outputs.pending == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          V: ${{ steps.version.outputs.value }}
+          SDK_COMMIT: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+
+          # "Before publish, retry only an exact matching draft, version and R"
+          # (#29 section 13). A job that dies between drafting and publishing
+          # leaves a draft behind and a re-run has to be able to finish it - but
+          # only if it is the same draft, at the same commit, still unpublished.
+          if existing=$(gh release view "v$V" --json isDraft,isPrerelease,targetCommitish 2>/dev/null); then
+            echo "$existing"
+            echo "$existing" | V="$V" SDK_COMMIT="$SDK_COMMIT" node -e '
+              let raw = "";
+              process.stdin.on("data", (chunk) => (raw += chunk));
+              process.stdin.on("end", () => {
+                const release = JSON.parse(raw);
+                const expected = { isDraft: true, isPrerelease: false, targetCommitish: process.env.SDK_COMMIT };
+                const bad = Object.entries(expected).filter(([key, value]) => release[key] !== value);
+                if (bad.length > 0) {
+                  for (const [key, value] of bad) {
+                    console.error(`v${process.env.V} already exists with ${key} ${JSON.stringify(release[key])}; an exact matching draft would have ${JSON.stringify(value)}`);
+                  }
+                  console.error("Only an exact matching draft may be retried; refusing to adopt this release.");
+                  process.exit(1);
+                }
+                console.log("reusing the exact matching draft left by an earlier attempt");
+              });
+            '
+            exit 0
+          fi
+
+          gh release create "v$V" \
+            --draft \
+            --target "$SDK_COMMIT" \
+            --title "v$V" \
+            --notes-file release-notes.md
+
+      - name: Assert the tag stays absent while the release is a draft
+        if: steps.plan.outputs.pending == 'true'
+        env:
+          V: ${{ steps.version.outputs.value }}
+        run: |
+          set -euo pipefail
+          if [ -n "$(git ls-remote --tags origin "refs/tags/v$V")" ]; then
+            echo "v$V is visible as a tag before the draft was published." >&2
+            echo "This contract assumes a draft exposes no tag; fail closed and re-specify (#29 section 13)." >&2
+            exit 1
+          fi
+          echo "v$V is still absent while the release is a draft"
+
+      - name: Validate the draft
+        if: steps.plan.outputs.pending == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          V: ${{ steps.version.outputs.value }}
+          SDK_COMMIT: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          gh release view "v$V" --json isDraft,isPrerelease,tagName,targetCommitish > draft.json
+          cat draft.json
+
+          node -e '
+            const draft = require("./draft.json");
+            const expected = { isDraft: true, isPrerelease: false, tagName: `v${process.env.V}`, targetCommitish: process.env.SDK_COMMIT };
+            const bad = Object.entries(expected).filter(([key, value]) => draft[key] !== value);
+            if (bad.length > 0) {
+              for (const [key, value] of bad) {
+                console.error(`draft ${key} is ${JSON.stringify(draft[key])}; expected ${JSON.stringify(value)}`);
+              }
+              process.exit(1);
+            }
+            console.log("draft validated");
+          '
+
+      # The canonical package is the GitHub exact-tag source archive (#141 section
+      # 10), so there is nothing to attach and no asset ordering constraint.
+      - name: Publish the draft, last
+        if: steps.plan.outputs.pending == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          V: ${{ steps.version.outputs.value }}
+        run: |
+          set -euo pipefail
+          gh release edit "v$V" --draft=false
+
+      - name: Require the published release and its tag to be github.sha
+        if: steps.plan.outputs.pending == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          V: ${{ steps.version.outputs.value }}
+          SDK_COMMIT: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+
+          tag_sha=$(git ls-remote origin "refs/tags/v$V^{}" | cut -f1)
+          if [ -z "$tag_sha" ]; then
+            tag_sha=$(git ls-remote origin "refs/tags/v$V" | cut -f1)
+          fi
+          if [ "$tag_sha" != "$SDK_COMMIT" ]; then
+            echo "v$V points at $tag_sha; expected $SDK_COMMIT" >&2
+            exit 1
+          fi
+
+          gh release view "v$V" --json isDraft,isPrerelease,tagName,targetCommitish > published.json
+          cat published.json
+
+          node -e '
+            const release = require("./published.json");
+            const expected = { isDraft: false, isPrerelease: false, tagName: `v${process.env.V}`, targetCommitish: process.env.SDK_COMMIT };
+            const bad = Object.entries(expected).filter(([key, value]) => release[key] !== value);
+            if (bad.length > 0) {
+              for (const [key, value] of bad) {
+                console.error(`published release ${key} is ${JSON.stringify(release[key])}; expected ${JSON.stringify(value)}`);
+              }
+              process.exit(1);
+            }
+            console.log("published release targets the release commit");
+          '
+
+          # No `gh release verify` here. It reads the attestation GitHub mints only
+          # for an immutable release, and repository-level release immutability is
+          # not enabled anywhere in this organization by operator decision. The call
+          # would fail *after* the publish, which is the one step with no way back,
+          # turning a dropped requirement into a red job on every successful
+          # release. What the tag points at is asserted above from git itself,
+          # which needs no attestation.
+
+      - name: Clean current-lane consumer builds the exact-tag archive
+        if: steps.plan.outputs.pending == 'true'
+        env:
+          V: ${{ steps.version.outputs.value }}
+          SDK_COMMIT: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+
+          EXPECTED=$(jq -r '.current.bobSha256' ci/defold-toolchain.json)
+          DEFOLD=$(jq -r '.current.defoldVersion' ci/defold-toolchain.json)
+          PLATFORM=$(jq -r '.current.platform' ci/defold-toolchain.json)
+          curl -sSL --fail-with-body -o bob.jar \
+            "https://github.com/defold/defold/releases/download/${DEFOLD}/bob.jar"
+          actual=$(sha256sum bob.jar | cut -d' ' -f1)
+          if [ "$actual" != "$EXPECTED" ]; then
+            echo "bob.jar for Defold ${DEFOLD} hashes to $actual; locked $EXPECTED. Refusing to execute it." >&2
+            exit 1
+          fi
+
+          # Same identity check as edge, for the same reason: the archive names no
+          # commit, so it is compared against git archive github.sha.
+          cd "$RUNNER_TEMP"
+          rm -rf tag-archive && mkdir tag-archive && cd tag-archive
+          curl -sSL --fail-with-body -o "v$V.zip" \
+            "https://github.com/$GITHUB_REPOSITORY/archive/refs/tags/v$V.zip"
+          unzip -q "v$V.zip"
+          git -C "$GITHUB_WORKSPACE" archive --prefix=expected/ "$SDK_COMMIT" | tar x
+          diff -r "$(basename "$GITHUB_REPOSITORY")-$V" expected
+          echo "the v$V archive is byte-identical to git archive $SDK_COMMIT"
+
+          node "$GITHUB_WORKSPACE/ci/stage-source-consumer.mjs" \
+            --root "$GITHUB_WORKSPACE" \
+            --out "$RUNNER_TEMP/stable-consumer" \
+            --dependency "https://github.com/$GITHUB_REPOSITORY/archive/refs/tags/v$V.zip"
+
+          cd "$RUNNER_TEMP/stable-consumer"
+          java -jar "$GITHUB_WORKSPACE/bob.jar" --archive --platform "$PLATFORM" resolve distclean build bundle
+
+          bundle=$(find build -name index.html -printf '%h\n' | head -1)
+          test -n "$bundle"
+          test -s "$bundle/index.html"
+          find "$bundle" -maxdepth 1 -name '*.wasm' -size +0 | grep -q .
+          echo "stable consumer bundled from $bundle"
+
+      # A Release published with GITHUB_TOKEN fires no release:published event, so
+      # a release listener would simply never run (#29 section 13, #141 section 4).
+      # The notifier is woken explicitly instead. This dispatch stays inside this
+      # repository, so GITHUB_TOKEN can do it and no App token is needed.
+      - name: Wake the Google Chat notifier by repository_dispatch
+        if: steps.plan.outputs.pending == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          V: ${{ steps.version.outputs.value }}
+          SDK_COMMIT: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          gh api "repos/$GITHUB_REPOSITORY/dispatches" \
+            --method POST \
+            --field event_type=yes2sdk-defold-stable-published \
+            --field "client_payload[sdkVersion]=$V" \
+            --field "client_payload[tag]=v$V" \
+            --field "client_payload[sourceCommit]=$SDK_COMMIT" \
+            --field "client_payload[runId]=${{ github.run_id }}" \
+            --field "client_payload[runAttempt]=${{ github.run_attempt }}"
+          echo "dispatched yes2sdk-defold-stable-published for v$V at $SDK_COMMIT"
+
+      - name: Record the stable diagnostics
+        if: always()
+        env:
+          V: ${{ steps.version.outputs.value }}
+          PENDING: ${{ steps.plan.outputs.pending }}
+        run: |
+          {
+            echo "### Stable"
+            echo ""
+            echo "| field | value |"
+            echo "| --- | --- |"
+            echo "| channel | stable |"
+            echo "| pending | ${PENDING:-unknown} |"
+            echo "| ref | ${GITHUB_REF} |"
+            echo "| sha | ${GITHUB_SHA} |"
+            echo "| SDK VERSION | ${V:-$(cat VERSION)} |"
+            echo "| Defold/Bob | $(jq -r '.current.defoldVersion' ci/defold-toolchain.json) |"
+            echo "| Java major | $(jq -r '.current.javaMajor' ci/defold-toolchain.json) |"
+            echo "| runner | ubuntu-24.04 |"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  # Release Please maintenance runs last, and the ordering is what enforces #29
+  # section 10's precondition rather than a second copy of the comparison: the
+  # stable job above has already established Vsource == Vstable by this point. It
+  # either published the pending version, or found nothing to finalize, or failed
+  # closed on Vsource < Vstable - and in that last case this job never runs.
+  release-please:
+    name: Release Please
+    needs: [required-ci, edge, stable]
+    if: github.ref == 'refs/heads/main' && needs.required-ci.result == 'success' && needs.edge.result == 'success' && needs.stable.result == 'success'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+
+    concurrency:
+      group: yes2-defold-release
+      cancel-in-progress: false
+
+    permissions:
+      contents: read
+
+    steps:
+      # A pull request opened with the default GITHUB_TOKEN fires no pull_request
+      # event, so a release PR opened that way would run no required CI and face no
+      # gate at all (#141 section 4). The App token exists for that reason and no
+      # other; every mutation downstream of the merge uses GITHUB_TOKEN. This job
+      # never runs on pull_request, so the secret never reaches a fork run.
+      - name: Mint the Butler App token
+        id: butler
+        uses: actions/create-github-app-token@v2
+        with:
+          app-id: ${{ secrets.BUTLER_APP_ID }}
+          private-key: ${{ secrets.BUTLER_APP_PRIVATE_KEY }}
+
+      # The Butler token, not GITHUB_TOKEN, is what the projector pushes with. Two
+      # reasons, both load-bearing: this job holds contents: read, and a push made
+      # with GITHUB_TOKEN fires no synchronize event, so the projected commit would
+      # never run required CI on the release pull request (#29 section 3).
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ steps.butler.outputs.token }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22.x"
+
+      # skip-github-release is set in release-please-config.json: this action owns
+      # the version calculation, the CHANGELOG entry, the release PR and the
+      # manifest transition only. It creates no tag and no Release (#141 section 1).
+      - name: Open or update the release pull request
+        id: release-please
+        uses: googleapis/release-please-action@v5
+        with:
+          token: ${{ steps.butler.outputs.token }}
+          config-file: release-please-config.json
+          manifest-file: .release-please-manifest.json
+
+      # #29 section 3. Release Please moves VERSION and the manifest; the three
+      # source mirrors are the projector's to move, and they have to be moved
+      # inside that same PR, because --check is a mandatory required-CI result and
+      # a PR with stale mirrors therefore cannot go green and cannot be merged.
+      - name: Project the mirrors onto the exact release pull request
+        # Empty when this invocation neither created nor updated a release pull
+        # request, which is the ordinary case on a merge that releases nothing.
+        if: steps.release-please.outputs.pr != ''
+        env:
+          GH_TOKEN: ${{ steps.butler.outputs.token }}
+          PR_JSON: ${{ steps.release-please.outputs.pr }}
+        run: |
+          set -euo pipefail
+
+          # The exact PR this same invocation reported, from its own documented
+          # output. Never a search, never a title match, never a label.
+          number=$(printf '%s' "$PR_JSON" | jq -r '.number // empty')
+          base=$(printf '%s' "$PR_JSON" | jq -r '.baseBranchName // empty')
+          head_ref=$(printf '%s' "$PR_JSON" | jq -r '.headBranchName // empty')
+          if ! printf '%s' "$number" | grep -Eq '^[1-9][0-9]*$'; then
+            echo "release-please reported PR number '$number'; a positive integer is required." >&2
+            exit 1
+          fi
+          if [ "$base" != "main" ] || [ -z "$head_ref" ]; then
+            echo "release-please reported base '$base' head '$head_ref'; expected base main and a non-empty head." >&2
+            exit 1
+          fi
+
+          gh pr view "$number" --json state,baseRefName,headRefName,headRepositoryOwner,headRepository,headRefOid > pr.json
+          cat pr.json
+
+          head_sha=$(jq -r '.headRefOid' pr.json)
+
+          # #29 section 3 also asks that the head SHA the invocation returned match
+          # the one on the fetched PR. The action's PullRequest object declares `sha`
+          # as optional, so it is compared when present and its absence is stated
+          # rather than passed over in silence.
+          reported_sha=$(printf '%s' "$PR_JSON" | jq -r '.sha // empty')
+          if [ -n "$reported_sha" ]; then
+            if [ "$reported_sha" != "$head_sha" ]; then
+              echo "release-please reported head $reported_sha; the fetched pull request head is $head_sha." >&2
+              exit 1
+            fi
+            echo "the reported head SHA matches the fetched pull request head"
+          else
+            echo "release-please reported no head SHA; using the fetched pull request head $head_sha"
+          fi
+
+          BASE="$base" HEAD_REF="$head_ref" node -e '
+            const pr = require("./pr.json");
+            const owner = pr.headRepositoryOwner?.login;
+            const repo = pr.headRepository?.name;
+            const expected = {
+              state: "OPEN",
+              baseRefName: process.env.BASE,
+              headRefName: process.env.HEAD_REF,
+            };
+            const bad = Object.entries(expected).filter(([key, value]) => pr[key] !== value);
+            if (`${owner}/${repo}` !== "yes2games/yes2sdk-defold") {
+              bad.push(["headRepository", `${owner}/${repo}`]);
+            }
+            if (!/^[0-9a-f]{40}$/.test(pr.headRefOid ?? "")) {
+              bad.push(["headRefOid", pr.headRefOid]);
+            }
+            if (bad.length > 0) {
+              for (const [key, value] of bad) {
+                console.error(`release pull request ${key} is ${JSON.stringify(value)}, which the projector will not push to`);
+              }
+              process.exit(1);
+            }
+            console.log("release pull request identity verified");
+          '
+
+          # Check out the exact fetched head SHA, not the branch name: the branch
+          # can move between the fetch and the push, and that race has to be a hard
+          # error rather than a silent overwrite.
+          git fetch origin "+refs/pull/$number/head:refs/remotes/pr/$number"
+          git checkout --detach "$head_sha"
+
+          node ci/sync-release-version.mjs --write
+          node ci/sync-release-version.mjs --check
+
+          changed=$(git diff --name-only)
+          if [ -z "$changed" ]; then
+            echo "the mirrors were already projected on $head_sha; nothing to push"
+            exit 0
+          fi
+
+          # Only the three allowed mirrors, and nothing else, ever reaches a commit
+          # from this job.
+          unexpected=$(printf '%s\n' "$changed" | grep -vE '^(game\.project|yes2sdk/src/yes2sdk\.cpp|README\.md)$' || true)
+          if [ -n "$unexpected" ]; then
+            echo "the projector changed files outside its three allowed mirrors:" >&2
+            printf '%s\n' "$unexpected" | sed 's/^/  /' >&2
+            exit 1
+          fi
+
+          git config user.name "yes2-butler[bot]"
+          git config user.email "yes2-butler[bot]@users.noreply.github.com"
+          git add game.project yes2sdk/src/yes2sdk.cpp README.md
+          git commit -m "chore: project version mirrors from VERSION"
+          projected=$(git rev-parse HEAD)
+
+          # Non-force, always. A non-fast-forward here means the PR head moved
+          # under us, and the correct response is to fail rather than to overwrite
+          # whatever moved it (#29 section 3).
+          git push origin "HEAD:refs/heads/$head_ref"
+
+          gh pr view "$number" --json state,baseRefName,headRefName,headRefOid > after.json
+          cat after.json
+          BASE="$base" HEAD_REF="$head_ref" PROJECTED="$projected" node -e '
+            const pr = require("./after.json");
+            const expected = {
+              state: "OPEN",
+              baseRefName: process.env.BASE,
+              headRefName: process.env.HEAD_REF,
+              headRefOid: process.env.PROJECTED,
+            };
+            const bad = Object.entries(expected).filter(([key, value]) => pr[key] !== value);
+            if (bad.length > 0) {
+              for (const [key, value] of bad) {
+                console.error(`after the push the release pull request ${key} is ${JSON.stringify(pr[key])}; expected ${JSON.stringify(value)}`);
+              }
+              process.exit(1);
+            }
+            console.log("the release pull request head is the projected commit, and its identity is unchanged");
+          '
