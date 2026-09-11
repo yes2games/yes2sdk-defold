@@ -36,3 +36,17 @@
 *.render_script linguist-language=Lua
 *.script linguist-language=Lua
 *.gui_script linguist-language=Lua
+
+# The archive is the product. A Defold consumer depends on this repository by URL
+# to an archive of a ref, and Bob resolves that archive by taking the *first* zip
+# entry named game.project as the library root and reading [library] include_dirs
+# from it. GitHub emits archive entries in git tree order, so any Defold project
+# living under a directory that sorts before the root game.project silently
+# becomes that root instead - Bob then mounts no include dirs and the consumer
+# fails with "the Lua module '/yes2sdk/yes2sdk.lua' can't be found", an error that
+# says nothing about packaging. ci/consumer/ is exactly such a project, and it
+# broke the edge lane on its first real run. CI scaffolding is not part of what an
+# integrator downloads, so it is not archived - which also leaves exactly one
+# game.project in the archive, so entry order stops mattering at all.
+# ci/verify-dependency-archive.mjs asserts that outcome on every pull request.
+/ci/ export-ignore

@@ -182,7 +182,15 @@ test("the final gate is non-matrix, always(), and needs every mandatory result",
     assert.doesNotMatch(gate, /strategy:/, "the final gate must be a single job, not a matrix");
 
     const needed = [...(/needs:\n((?:\s*- \S+\n)+)/.exec(gate)?.[1] ?? "").matchAll(/- (\S+)/g)].map((match) => match[1]);
-    const mandatory = ["workflow-governance", "release-state", "mirror-check", "ci-tests", "web-js-syntax", "bob"];
+    const mandatory = [
+        "workflow-governance",
+        "release-state",
+        "mirror-check",
+        "dependency-archive",
+        "ci-tests",
+        "web-js-syntax",
+        "bob",
+    ];
     assert.deepEqual(needed.sort(), mandatory.sort());
 
     // Whatever the gate depends on has to exist, or it would pass by vacuity.
