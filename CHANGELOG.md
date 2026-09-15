@@ -4,6 +4,19 @@ All notable changes to Yes2SDK for Defold will be documented in this file.
 
 Format follows [Keep a Changelog](https://keepachangelog.com/). Versioning follows [Semantic Versioning](https://semver.org/).
 
+## [1.7.0](https://github.com/yes2games/yes2sdk-defold/compare/v1.6.1...v1.7.0) (2026-09-15)
+
+
+### Features
+
+* **ci:** lock Defold SDK CI, tag-only edge, and exact-SHA stable ([#33](https://github.com/yes2games/yes2sdk-defold/issues/33)) ([2ed8b8e](https://github.com/yes2games/yes2sdk-defold/commit/2ed8b8e9f2ba06c299f8201f7631d2309e446475))
+
+
+### Bug Fixes
+
+* **ci:** converge the projector's post-push read instead of sampling it once ([#36](https://github.com/yes2games/yes2sdk-defold/issues/36)) ([999d58e](https://github.com/yes2games/yes2sdk-defold/commit/999d58e57c62d7a1b3a41b5194c74d6b7c9980db))
+* **ci:** keep ci/ out of the dependency archive so Bob can resolve it ([#34](https://github.com/yes2games/yes2sdk-defold/issues/34)) ([8490a15](https://github.com/yes2games/yes2sdk-defold/commit/8490a15d88cebc4529d4d96539fbe5670dce3051))
+
 ## [1.6.1] - 2026-08-24
 
 ### Fixed
