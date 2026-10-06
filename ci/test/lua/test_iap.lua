@@ -80,4 +80,41 @@ function T.consume_single_flight_guard_is_kept()
   h.eq(#fake:calls_to("iap_consume_purchase"), 2)
 end
 
+-- A native argument error (luaL_check*) raises before the native stores the
+-- callback, so no callback will ever clear the in-flight flag. The wrapper must
+-- clear it itself and still raise the error to the caller.
+local function raising_native(name)
+  local raise = true
+  local overrides = {}
+  overrides[name] = function()
+    if raise then
+      raise = false
+      error("bad argument #1 to '" .. name .. "' (string expected, got nil)")
+    end
+  end
+  return h.fake_native{ overrides = overrides }
+end
+
+function T.purchase_guard_is_released_when_the_native_call_raises()
+  local fake = raising_native("iap_purchase")
+  local sdk = h.load_wrapper{ native = fake }
+  local ok, err = pcall(sdk.iap_purchase, nil, nil, function() end)
+  h.falsy(ok, "the argument error must still raise")
+  h.match(tostring(err), "bad argument", "the native error must propagate")
+  sdk.iap_purchase("coins", nil, function() end)
+  h.eq(#fake:calls_to("iap_purchase"), 2, "the next purchase must reach the native")
+  h.falsy(h.printed("iap_purchase rejected"), "the next purchase must not be rejected")
+end
+
+function T.consume_guard_is_released_when_the_native_call_raises()
+  local fake = raising_native("iap_consume_purchase")
+  local sdk = h.load_wrapper{ native = fake }
+  local ok, err = pcall(sdk.iap_consume_purchase, nil, function() end)
+  h.falsy(ok, "the argument error must still raise")
+  h.match(tostring(err), "bad argument", "the native error must propagate")
+  sdk.iap_consume_purchase("t1", function() end)
+  h.eq(#fake:calls_to("iap_consume_purchase"), 2, "the next consume must reach the native")
+  h.falsy(h.printed("iap_consume_purchase rejected"), "the next consume must not be rejected")
+end
+
 return T
