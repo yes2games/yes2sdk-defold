@@ -296,6 +296,46 @@ function M.parse_error(err)
   return result
 end
 
+-- ── Option encoding ──
+
+-- Build the error JSON string every failure carries (see M.parse_error).
+local function invalid_param(message, context)
+  return json.encode({
+    code = "INVALID_PARAM",
+    message = message,
+    context = context or "",
+  })
+end
+
+-- Turn an options argument into the JSON string the native layer takes.
+-- table -> json.encode (an empty table gives nil); string -> as is (empty gives
+-- nil); nil -> nil. Anything else returns nil, err_json (code INVALID_PARAM).
+local function encode_options(v)
+  local kind = type(v)
+  if kind == "nil" then return nil end
+  if kind == "table" then
+    if next(v) == nil then return nil end
+    return json.encode(v)
+  end
+  if kind == "string" then
+    if v == "" then return nil end
+    return v
+  end
+  return nil, invalid_param("options must be a table or a JSON string, got " .. kind)
+end
+
+-- Deliver callback(self, false, err_json) on the next frame. Async APIs never
+-- call back synchronously on a validation failure. The timer is created in the
+-- calling script's context, so the callback receives the right self.
+local function fail_async(callback, err_json)
+  if not callback then return end
+  local ok = pcall(timer.delay, 0, false, function(tself) callback(tself, false, err_json) end)
+  if not ok then callback(nil, false, err_json) end
+end
+
+-- Test hook, not public API.
+M._internal = { encode_options = encode_options, fail_async = fail_async, invalid_param = invalid_param }
+
 -- ── Core (mandatory) ──
 
 function M.initialize(callback)
