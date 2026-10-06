@@ -1135,10 +1135,16 @@ function M.iap_purchase(product_id, developer_payload, callback)
     return
   end
   _iap_purchase_in_flight = true
-  sdk.iap_purchase(product_id, developer_payload, function(self, success, purchase_json)
+  local ok, err = pcall(sdk.iap_purchase, product_id, developer_payload, function(self, success, purchase_json)
     _iap_purchase_in_flight = false
     if callback then callback(self, success, purchase_json) end
   end)
+  if not ok then
+    -- The native raised (a wrong argument type) before it kept the callback, so
+    -- nothing will clear the flag: clear it here and re-raise the error.
+    _iap_purchase_in_flight = false
+    error(err, 0)
+  end
 end
 
 --- Get the player's outstanding (unconsumed) purchases.
@@ -1158,10 +1164,15 @@ function M.iap_consume_purchase(purchase_token, callback)
     return
   end
   _iap_consume_in_flight = true
-  sdk.iap_consume_purchase(purchase_token, function(self, success, err)
+  local ok, call_err = pcall(sdk.iap_consume_purchase, purchase_token, function(self, success, err)
     _iap_consume_in_flight = false
     if callback then callback(self, success, err) end
   end)
+  if not ok then
+    -- Same as iap_purchase: release the guard, then re-raise the native error.
+    _iap_consume_in_flight = false
+    error(call_err, 0)
+  end
 end
 
 --- Check whether in-app purchases are supported on the current platform.
