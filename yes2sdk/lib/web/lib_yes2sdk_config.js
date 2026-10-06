@@ -1,40 +1,22 @@
 var Yes2SDKConfigLib = {
 
-    $Yes2SDKConfigCallbacks: {
-        _getFlagsPtr: null,
+    // Each async call carries the request id minted in C++ and completes through
+    // $Yes2SDKBridge (defined in lib_yes2sdk.js), so overlapping calls never share
+    // a callback slot. Strings are read before the call returns: the pointers are
+    // only valid until then.
 
-        allocateString: function (str) {
-            return stringToUTF8OnStack(str);
-        }
-    },
-
-    Yes2SDK_config_getFlags: function (optionsJsonPtr, callback) {
-        Yes2SDKConfigCallbacks._getFlagsPtr = callback;
+    Yes2SDK_config_getFlags: function (optionsJsonPtr, requestId, callback) {
         var options;
-        try { options = JSON.parse(UTF8ToString(optionsJsonPtr) || "{}"); }
+        try { options = JSON.parse(UTF8ToString(optionsJsonPtr) || '{}'); }
         catch (e) {
             // Invalid options JSON falls back to no options rather than failing the call.
             options = {};
         }
-
-        if (window.Yes2SDK && window.Yes2SDK.config) {
-            try {
-                window.Yes2SDK.config.getFlagsAsync(options)
-                    .then(function (result) {
-                        var json = JSON.stringify(result || {});
-                        {{{ makeDynCall("vii", "Yes2SDKConfigCallbacks._getFlagsPtr") }}}(1, Yes2SDKConfigCallbacks.allocateString(json));
-                    })
-                    .catch(function (err) {
-                        var msg = typeof err === 'object' ? JSON.stringify(err) : String(err);
-                        {{{ makeDynCall("vii", "Yes2SDKConfigCallbacks._getFlagsPtr") }}}(0, Yes2SDKConfigCallbacks.allocateString(msg));
-                    });
-            } catch (e) {
-                // Synchronous throw (e.g. method missing on this platform) never reaches .catch — route it here so the Lua callback still fires.
-                {{{ makeDynCall("vii", "Yes2SDKConfigCallbacks._getFlagsPtr") }}}(0, Yes2SDKConfigCallbacks.allocateString(typeof e === 'object' ? JSON.stringify(e) : String(e)));
-            }
-        } else {
-            {{{ makeDynCall("vii", "Yes2SDKConfigCallbacks._getFlagsPtr") }}}(0, Yes2SDKConfigCallbacks.allocateString("SDK not initialized"));
-        }
+        Yes2SDKBridge.run(callback, requestId, 'config.getFlagsAsync', function () {
+            return [options];
+        }, function (result) {
+            return JSON.stringify(result || {});
+        });
     },
 
     Yes2SDK_config_isSupported: function () {
@@ -47,5 +29,5 @@ var Yes2SDKConfigLib = {
     }
 }
 
-autoAddDeps(Yes2SDKConfigLib, '$Yes2SDKConfigCallbacks');
+autoAddDeps(Yes2SDKConfigLib, '$Yes2SDKBridge');
 addToLibrary(Yes2SDKConfigLib);

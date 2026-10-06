@@ -1,56 +1,20 @@
 var Yes2SDKReviewLib = {
 
-    $Yes2SDKReviewCallbacks: {
-        _canReviewPtr: null,
-        _requestReviewPtr: null,
+    // Each async call carries the request id minted in C++ and completes through
+    // $Yes2SDKBridge (defined in lib_yes2sdk.js), so overlapping calls never share
+    // a callback slot. Strings are read before the call returns: the pointers are
+    // only valid until then.
 
-        allocateString: function (str) {
-            return stringToUTF8OnStack(str);
-        }
+    Yes2SDK_review_canReview: function (requestId, callback) {
+        Yes2SDKBridge.run(callback, requestId, 'review.canReviewAsync', null, function (result) {
+            return JSON.stringify(result || {});
+        });
     },
 
-    Yes2SDK_review_canReview: function (callback) {
-        Yes2SDKReviewCallbacks._canReviewPtr = callback;
-        if (window.Yes2SDK && window.Yes2SDK.review) {
-            try {
-                window.Yes2SDK.review.canReviewAsync()
-                    .then(function (result) {
-                        var json = JSON.stringify(result || {});
-                        {{{ makeDynCall("vii", "Yes2SDKReviewCallbacks._canReviewPtr") }}}(1, Yes2SDKReviewCallbacks.allocateString(json));
-                    })
-                    .catch(function (err) {
-                        var msg = typeof err === 'object' ? JSON.stringify(err) : String(err);
-                        {{{ makeDynCall("vii", "Yes2SDKReviewCallbacks._canReviewPtr") }}}(0, Yes2SDKReviewCallbacks.allocateString(msg));
-                    });
-            } catch (e) {
-                // Synchronous throw (e.g. method missing on this platform) never reaches .catch — route it here so the Lua callback still fires.
-                {{{ makeDynCall("vii", "Yes2SDKReviewCallbacks._canReviewPtr") }}}(0, Yes2SDKReviewCallbacks.allocateString(typeof e === 'object' ? JSON.stringify(e) : String(e)));
-            }
-        } else {
-            {{{ makeDynCall("vii", "Yes2SDKReviewCallbacks._canReviewPtr") }}}(0, Yes2SDKReviewCallbacks.allocateString("SDK not initialized"));
-        }
-    },
-
-    Yes2SDK_review_requestReview: function (callback) {
-        Yes2SDKReviewCallbacks._requestReviewPtr = callback;
-        if (window.Yes2SDK && window.Yes2SDK.review) {
-            try {
-                window.Yes2SDK.review.requestReviewAsync()
-                    .then(function (result) {
-                        var json = JSON.stringify(result || {});
-                        {{{ makeDynCall("vii", "Yes2SDKReviewCallbacks._requestReviewPtr") }}}(1, Yes2SDKReviewCallbacks.allocateString(json));
-                    })
-                    .catch(function (err) {
-                        var msg = typeof err === 'object' ? JSON.stringify(err) : String(err);
-                        {{{ makeDynCall("vii", "Yes2SDKReviewCallbacks._requestReviewPtr") }}}(0, Yes2SDKReviewCallbacks.allocateString(msg));
-                    });
-            } catch (e) {
-                // Synchronous throw (e.g. method missing on this platform) never reaches .catch — route it here so the Lua callback still fires.
-                {{{ makeDynCall("vii", "Yes2SDKReviewCallbacks._requestReviewPtr") }}}(0, Yes2SDKReviewCallbacks.allocateString(typeof e === 'object' ? JSON.stringify(e) : String(e)));
-            }
-        } else {
-            {{{ makeDynCall("vii", "Yes2SDKReviewCallbacks._requestReviewPtr") }}}(0, Yes2SDKReviewCallbacks.allocateString("SDK not initialized"));
-        }
+    Yes2SDK_review_requestReview: function (requestId, callback) {
+        Yes2SDKBridge.run(callback, requestId, 'review.requestReviewAsync', null, function (result) {
+            return JSON.stringify(result || {});
+        });
     },
 
     Yes2SDK_review_isSupported: function () {
@@ -63,5 +27,5 @@ var Yes2SDKReviewLib = {
     }
 }
 
-autoAddDeps(Yes2SDKReviewLib, '$Yes2SDKReviewCallbacks');
+autoAddDeps(Yes2SDKReviewLib, '$Yes2SDKBridge');
 addToLibrary(Yes2SDKReviewLib);
