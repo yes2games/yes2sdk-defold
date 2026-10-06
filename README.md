@@ -7,7 +7,7 @@ A single SDK for your Defold HTML5 game. Integrate once against Yes2SDK, submit 
 
 ## Requirements
 
-- Yes2SDK 2.10.0 or newer for the new APIs (referrals, subscriptions, notifications, context sharing, entry point data, registration prompt, data flush); older runtimes report `FEATURE_NOT_SUPPORTED` for them.
+- Yes2SDK runtime 2.10.0 or newer for referrals, subscriptions, notifications, context sharing, entry point data, the registration prompt, confirmed writes and `on_exit_requested`. Older runtimes report `FEATURE_NOT_SUPPORTED` for those calls, and `on_exit_requested` never fires.
 - Defold 1.10.2 or newer — the oldest version `build.defold.com`, Defold's hosted extension build server, still compiles native extensions for. This SDK *is* a native extension, so on an older Defold the bundle fails at the build server with `HTTP 501 — Engine version '<sha>' is not supported on the current server`, whatever else your project does.
 
   Do not lower this number without first checking that the hosted server accepts the older SDK again. Defold prunes old SDKs from that server as new versions ship, so this floor moves up over time and never down. It is a floor of the hosted server rather than of the engine: Defold still publishes the older SDK archives, so a self-hosted extender may well build further back — untested here, and not something this SDK promises.
@@ -283,7 +283,7 @@ yes2sdk.data_flush(function(self, success, err) end)           -- write everythi
 yes2sdk.player_flush_data(function(self, success, err) end)    -- write pending player_set_data values
 ```
 
-On platforms without confirmed writes the callback reports `FEATURE_NOT_SUPPORTED`. In the editor the mock confirms every call on the next frame without storing anything.
+`data_set_string_async` and `data_flush` work everywhere (on platforms with local storage they confirm right away). `player_flush_data` reports `FEATURE_NOT_SUPPORTED` where `player_is_data_supported()` is false. In the editor the mock confirms every call on the next frame without storing anything.
 
 ### Analytics (recommended)
 
@@ -656,8 +656,6 @@ yes2sdk.notifications_cancel_all(function(self, success, error) end)
 - **Same id replaces.** Scheduling with an id that is already scheduled replaces the earlier notification. Without an id one is generated and returned.
 - **Result:** the callback gets `{"id","title","body","scheduledAt"}` with `scheduledAt` in milliseconds since the epoch. Invalid options fail with `INVALID_PARAM`.
 
----
-
 ### Referrals
 
 On platforms that support it, a player can invite friends with a referral link and the game can list who joined. Gate it on `referrals_is_supported()`.
@@ -684,9 +682,11 @@ end
 
 `referrals_share` options: `reference` (required, a non-empty string), `data` (table), `title`, `text` and `image` (base64 data URL, PNG, JPEG or WebP, at most 2 MB). A missing or empty `reference` fails the callback with `INVALID_PARAM`. Both calls report failures through the usual error JSON (see [Errors](#errors)).
 
+---
+
 ## Callbacks and script lifetime
 
-- Every async function except the `ads_show_*` calls takes a callback `function(self, success, result)`. Overlapping calls to the same function each get their own callback, with their own result. The exceptions: `iap_purchase`, `iap_consume_purchase` and the `ads_show_*` calls reject a second call while one is open, and `initialize` and `start_game` are called once per session.
+- Every async function except the `ads_show_*` calls takes a callback `function(self, success, result)`. Overlapping calls to the same function each get their own callback, with their own result. The exceptions: `iap_purchase`, `iap_consume_purchase` and the `ads_show_*` calls reject a second call while one is open, `iap_subscribe` fails a second call while one is open with `INVALID_OPERATION`, and `initialize` and `start_game` are called once per session.
 - A call that fails at runtime is reported through its callback with `success == false` and an error string, not raised into your script; only wrong argument types raise. That includes a call the loaded SDK does not provide (see [Errors](#errors)).
 - Call SDK functions from a long-lived script, for example the script of your main collection. The callback and the SDK's own timers belong to the script instance that made the call. A script in a collection proxy that gets unloaded, or that is paused with a time step of 0 while an ad is up, can miss its callbacks or delay the ad's release.
 - If the script instance that made a call is deleted before the response arrives, the response is dropped and a warning is logged. Nothing runs against the deleted instance.
@@ -728,6 +728,7 @@ Common SDK codes games may branch on:
 | `FEATURE_NOT_SUPPORTED`, `PLATFORM_NOT_SUPPORTED` | Not available on this platform. |
 | `NETWORK_FAILURE`, `TIMEOUT` | Transient, usually worth a later retry. |
 | `INVALID_PARAM` | An argument was rejected. |
+| `INVALID_OPERATION` | The call is not allowed right now, for example a second `iap_subscribe` while one is open, or a registration prompt for a player who is already registered. |
 | `PLATFORM_ERROR` | The platform reported a failure. |
 
 `yes2sdk.parse_error(err)` turns the error into a table `{ code = string, message = string, context = string }`. It never raises: a plain string that is not this JSON (for example from an older SDK) comes back as `code = "UNKNOWN_ERROR"` with the string as `message`, and `nil` gives an empty message.
@@ -806,12 +807,13 @@ The native extension is HTML5-only. In the Defold editor, `yes2sdk.*` calls run 
 
 - `initialize` / `start_game` succeed on the next frame
 - **Ads play a timed mock flow** (3s interstitial, 5s rewarded) and then fire the full callback sequence, so pause-resume wiring in `before_ad` / `after_ad` and the reward path in `ad_viewed` are exercised like a real ad
-- **IAP works end to end**: `iap_is_supported()` returns true, `iap_get_catalog` returns a sample catalog, `iap_purchase` accepts any product id and resolves with a realistic purchase payload, and `iap_get_purchases` / `iap_consume_purchase` operate on a session purchase list
 - Referrals work too: `referrals_is_supported()` returns true, `referrals_share` succeeds and `referrals_list` returns an empty list
 - `context_share` succeeds on the next frame and prints the share, and `context_is_supported()` returns true (real platforms may report false even where sharing works, so do not gate on it)
 - **IAP works end to end**: `iap_is_supported()` returns true, `iap_get_catalog` returns a sample catalog, `iap_purchase` accepts any product id and resolves with a realistic purchase payload, and `iap_get_purchases` / `iap_consume_purchase` operate on a session purchase list. Mock purchases carry `"isSandbox":true`. Subscriptions are mocked too: a sample `yes2.mock.premium.monthly` offer, subscribe / cancel / retention offer / status on session state
 - `auth_show_registration_prompt` returns a handle: `login()` prints a line, `close()` fires `on_close` on the next frame
-- Other modules keep the one-time-warning stub with sensible defaults
+- `notifications_is_supported()` returns true, `notifications_schedule` echoes the notification with a computed `scheduledAt`, and `notifications_cancel` / `notifications_cancel_all` succeed
+- Confirmed writes: `data_set_string_async`, `data_flush` and `player_flush_data` succeed on the next frame without storing anything
+- Everything else keeps the one-time-warning stub with sensible defaults
 
 Configure the mock in `game.project` (all keys optional):
 
