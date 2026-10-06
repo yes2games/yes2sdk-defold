@@ -36,6 +36,7 @@ test("session: every Yes2SDK_session_* function is exported", () => {
         "Yes2SDK_session_getLocale",
         "Yes2SDK_session_isAudioEnabled",
         "Yes2SDK_session_getDeviceInfo",
+        "Yes2SDK_session_getEntryPointData",
     ]) {
         assert.equal(typeof exports[name], "function", `${name} is not exported`);
     }

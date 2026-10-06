@@ -47,6 +47,7 @@ if not sdk then
   function sdk.auth_is_supported() warn() return false end
   function sdk.player_is_data_supported() warn() return false end
   function sdk.session_is_audio_enabled() warn() return true end
+  function sdk.session_get_entry_point_data() warn() return "{}" end
 
   -- ── Editor mock (desktop builds only) ──
   --
@@ -95,6 +96,11 @@ if not sdk then
     function sdk.set_loading_progress(progress) end
     -- Exit requests never happen in the editor, so registering is a quiet no-op.
     function sdk.on_exit_requested(callback) end
+
+    -- Entry point data: mock_entry_point_data in game.project is a JSON object string.
+    function sdk.session_get_entry_point_data()
+      return mock_config("mock_entry_point_data", "{}")
+    end
 
     -- Ads: delayed flows so pause/resume wiring is exercised like a real ad.
     -- Durations match the Unity SDK's mock ad popup.
@@ -1189,6 +1195,19 @@ end
 --- Check whether in-app purchases are supported on the current platform.
 function M.iap_is_supported()
   return sdk.iap_is_supported()
+end
+
+-- ── Entry point data ──
+
+--- Data the player arrived with, for example from a shared link or after
+-- registering. Returns a table (empty when there is none or on platforms that
+-- do not support it).
+function M.session_get_entry_point_data()
+  local text = sdk.session_get_entry_point_data()
+  if type(text) ~= "string" then return {} end
+  local ok, decoded = pcall(json.decode, text)
+  if ok and type(decoded) == "table" then return decoded end
+  return {}
 end
 
 return M
