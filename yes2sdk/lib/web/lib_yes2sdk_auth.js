@@ -1,13 +1,5 @@
 var Yes2SDKAuthLib = {
 
-    $Yes2SDKAuthCallbacks: {
-        _signInPtr: null,
-
-        allocateString: function (str) {
-            return stringToUTF8OnStack(str);
-        }
-    },
-
     Yes2SDK_auth_isAuthenticated: function () {
         try {
             if (window.Yes2SDK && window.Yes2SDK.auth) {
@@ -26,23 +18,13 @@ var Yes2SDKAuthLib = {
         return 0;
     },
 
-    Yes2SDK_auth_signIn: function (callback) {
-        Yes2SDKAuthCallbacks._signInPtr = callback;
-
-        if (window.Yes2SDK && window.Yes2SDK.auth) {
-            window.Yes2SDK.auth.signInAsync()
-                .then(function () {
-                    {{{ makeDynCall("vii", "Yes2SDKAuthCallbacks._signInPtr") }}}(1, 0);
-                })
-                .catch(function (err) {
-                    var msg = typeof err === 'object' ? JSON.stringify(err) : String(err);
-                    {{{ makeDynCall("vii", "Yes2SDKAuthCallbacks._signInPtr") }}}(0, Yes2SDKAuthCallbacks.allocateString(msg));
-                });
-        } else {
-            {{{ makeDynCall("vii", "callback") }}}(0, Yes2SDKAuthCallbacks.allocateString("SDK not initialized"));
-        }
+    Yes2SDK_auth_signIn: function (requestId, callback) {
+        // signInAsync resolves with a user object we do not forward: success with no payload.
+        Yes2SDKBridge.run(callback, requestId, 'auth.signInAsync', null, function () {
+            return null;
+        });
     }
 }
 
-autoAddDeps(Yes2SDKAuthLib, '$Yes2SDKAuthCallbacks');
+autoAddDeps(Yes2SDKAuthLib, '$Yes2SDKBridge');
 addToLibrary(Yes2SDKAuthLib);

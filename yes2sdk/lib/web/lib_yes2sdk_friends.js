@@ -1,29 +1,9 @@
 var Yes2SDKFriendsLib = {
 
-    $Yes2SDKFriendsCallbacks: {
-        _listFriendsPtr: null,
-
-        allocateString: function (str) {
-            return stringToUTF8OnStack(str);
-        }
-    },
-
-    Yes2SDK_friends_listFriends: function (page, size, callback) {
-        Yes2SDKFriendsCallbacks._listFriendsPtr = callback;
-
-        if (window.Yes2SDK && window.Yes2SDK.friends) {
-            window.Yes2SDK.friends.listFriendsAsync(page, size)
-                .then(function (result) {
-                    var json = JSON.stringify(result);
-                    {{{ makeDynCall("vii", "Yes2SDKFriendsCallbacks._listFriendsPtr") }}}(1, Yes2SDKFriendsCallbacks.allocateString(json));
-                })
-                .catch(function (err) {
-                    var msg = typeof err === 'object' ? JSON.stringify(err) : String(err);
-                    {{{ makeDynCall("vii", "Yes2SDKFriendsCallbacks._listFriendsPtr") }}}(0, Yes2SDKFriendsCallbacks.allocateString(msg));
-                });
-        } else {
-            {{{ makeDynCall("vii", "callback") }}}(0, Yes2SDKFriendsCallbacks.allocateString("SDK not initialized"));
-        }
+    Yes2SDK_friends_listFriends: function (page, size, requestId, callback) {
+        Yes2SDKBridge.run(callback, requestId, 'friends.listFriendsAsync', function () {
+            return [page, size];
+        });
     },
 
     Yes2SDK_friends_isSupported: function () {
@@ -36,5 +16,5 @@ var Yes2SDKFriendsLib = {
     }
 }
 
-autoAddDeps(Yes2SDKFriendsLib, '$Yes2SDKFriendsCallbacks');
+autoAddDeps(Yes2SDKFriendsLib, '$Yes2SDKBridge');
 addToLibrary(Yes2SDKFriendsLib);
