@@ -27,3 +27,10 @@ void lua_pushlistener(lua_State *L, struct lua_Listener &listener) {
     dmScript::SetInstance(L);
     assert(top + 2 == lua_gettop(L));
 }
+
+void lua_logpcallerror(lua_State *L, const char *where) {
+    const char *msg = lua_tostring(L, -1);
+    if (!msg) { msg = "(non-string error)"; }
+    dmLogError("[Yes2SDK] %s callback error: %s", where, msg);
+    lua_pop(L, 1);
+}

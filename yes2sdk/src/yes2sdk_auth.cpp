@@ -11,7 +11,7 @@ void Yes2SDKAuth::OnSignIn(const int success, const char* error) {
     lua_pushboolean(L, success);
     if (error) { lua_pushstring(L, error); } else { lua_pushnil(L); }
     int ret = lua_pcall(L, 3, 0, 0);
-    if (ret != 0) { lua_pop(L, 1); }
+    if (ret != 0) { lua_logpcallerror(L, "auth sign_in"); }
     assert(top == lua_gettop(L));
 }
 int Yes2SDKAuth::IsAuthenticated(lua_State* L) {

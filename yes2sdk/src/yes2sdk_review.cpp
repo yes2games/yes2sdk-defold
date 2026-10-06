@@ -12,7 +12,7 @@ void Yes2SDKReview::OnCanReview(const int success, const char* result) {
     lua_pushboolean(L, success);
     if (result) { lua_pushstring(L, result); } else { lua_pushnil(L); }
     int ret = lua_pcall(L, 3, 0, 0);
-    if (ret != 0) { lua_pop(L, 1); }
+    if (ret != 0) { lua_logpcallerror(L, "review can_review"); }
     assert(top == lua_gettop(L));
 }
 void Yes2SDKReview::OnRequestReview(const int success, const char* result) {
@@ -23,7 +23,7 @@ void Yes2SDKReview::OnRequestReview(const int success, const char* result) {
     lua_pushboolean(L, success);
     if (result) { lua_pushstring(L, result); } else { lua_pushnil(L); }
     int ret = lua_pcall(L, 3, 0, 0);
-    if (ret != 0) { lua_pop(L, 1); }
+    if (ret != 0) { lua_logpcallerror(L, "review request_review"); }
     assert(top == lua_gettop(L));
 }
 int Yes2SDKReview::CanReview(lua_State* L) {

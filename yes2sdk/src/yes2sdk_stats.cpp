@@ -13,7 +13,7 @@ void Yes2SDKStats::OnGet(const int success, const char* result) {
     lua_pushboolean(L, success);
     if (result) { lua_pushstring(L, result); } else { lua_pushnil(L); }
     int ret = lua_pcall(L, 3, 0, 0);
-    if (ret != 0) { lua_pop(L, 1); }
+    if (ret != 0) { lua_logpcallerror(L, "stats get"); }
     assert(top == lua_gettop(L));
 }
 void Yes2SDKStats::OnSet(const int success, const char* error) {
@@ -24,7 +24,7 @@ void Yes2SDKStats::OnSet(const int success, const char* error) {
     lua_pushboolean(L, success);
     if (error) { lua_pushstring(L, error); } else { lua_pushnil(L); }
     int ret = lua_pcall(L, 3, 0, 0);
-    if (ret != 0) { lua_pop(L, 1); }
+    if (ret != 0) { lua_logpcallerror(L, "stats set"); }
     assert(top == lua_gettop(L));
 }
 void Yes2SDKStats::OnIncrement(const int success, const char* result) {
@@ -35,7 +35,7 @@ void Yes2SDKStats::OnIncrement(const int success, const char* result) {
     lua_pushboolean(L, success);
     if (result) { lua_pushstring(L, result); } else { lua_pushnil(L); }
     int ret = lua_pcall(L, 3, 0, 0);
-    if (ret != 0) { lua_pop(L, 1); }
+    if (ret != 0) { lua_logpcallerror(L, "stats increment"); }
     assert(top == lua_gettop(L));
 }
 int Yes2SDKStats::Get(lua_State* L) {
