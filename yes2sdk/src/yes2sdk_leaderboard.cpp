@@ -1,82 +1,36 @@
 #include "yes2sdk_leaderboard.h"
-#include "luautils.h"
+#include "yes2sdk_requests.h"
 #if defined(DM_PLATFORM_HTML5)
-lua_Listener onLeaderboardGetListener;
-lua_Listener onLeaderboardSetScoreListener;
-lua_Listener onLeaderboardGetEntriesListener;
-lua_Listener onLeaderboardGetPlayerEntryListener;
-
-void Yes2SDKLeaderboard::OnGet(const int success, const char* result) {
-    lua_State* L = onLeaderboardGetListener.m_L;
-    if (!L) return;
-    int top = lua_gettop(L);
-    lua_pushlistener(L, onLeaderboardGetListener);
-    lua_pushboolean(L, success);
-    if (result) { lua_pushstring(L, result); } else { lua_pushnil(L); }
-    int ret = lua_pcall(L, 3, 0, 0);
-    if (ret != 0) { lua_logpcallerror(L, "leaderboard get"); }
-    assert(top == lua_gettop(L));
-}
-void Yes2SDKLeaderboard::OnSetScore(const int success, const char* result) {
-    lua_State* L = onLeaderboardSetScoreListener.m_L;
-    if (!L) return;
-    int top = lua_gettop(L);
-    lua_pushlistener(L, onLeaderboardSetScoreListener);
-    lua_pushboolean(L, success);
-    if (result) { lua_pushstring(L, result); } else { lua_pushnil(L); }
-    int ret = lua_pcall(L, 3, 0, 0);
-    if (ret != 0) { lua_logpcallerror(L, "leaderboard set_score"); }
-    assert(top == lua_gettop(L));
-}
-void Yes2SDKLeaderboard::OnGetEntries(const int success, const char* result) {
-    lua_State* L = onLeaderboardGetEntriesListener.m_L;
-    if (!L) return;
-    int top = lua_gettop(L);
-    lua_pushlistener(L, onLeaderboardGetEntriesListener);
-    lua_pushboolean(L, success);
-    if (result) { lua_pushstring(L, result); } else { lua_pushnil(L); }
-    int ret = lua_pcall(L, 3, 0, 0);
-    if (ret != 0) { lua_logpcallerror(L, "leaderboard get_entries"); }
-    assert(top == lua_gettop(L));
-}
-void Yes2SDKLeaderboard::OnGetPlayerEntry(const int success, const char* result) {
-    lua_State* L = onLeaderboardGetPlayerEntryListener.m_L;
-    if (!L) return;
-    int top = lua_gettop(L);
-    lua_pushlistener(L, onLeaderboardGetPlayerEntryListener);
-    lua_pushboolean(L, success);
-    if (result) { lua_pushstring(L, result); } else { lua_pushnil(L); }
-    int ret = lua_pcall(L, 3, 0, 0);
-    if (ret != 0) { lua_logpcallerror(L, "leaderboard get_player_entry"); }
-    assert(top == lua_gettop(L));
-}
+// Every async call registers its own request (callback + script instance) and passes
+// the id through the JS bridge, so overlapping calls each complete their own callback.
+// Register comes after the argument checks so a bad argument cannot leak a request.
 int Yes2SDKLeaderboard::Get(lua_State* L) {
     const char* name = luaL_checkstring(L, 1);
-    luaL_checklistener(L, 2, onLeaderboardGetListener);
-    Yes2SDK_leaderboard_get(name, Yes2SDKLeaderboard::OnGet);
+    int id = Yes2SDKRequests::Register(L, 2, "leaderboard_get");
+    Yes2SDK_leaderboard_get(name, id, Yes2SDKRequests::Complete);
     return 0;
 }
 int Yes2SDKLeaderboard::SetScore(lua_State* L) {
     const char* name = luaL_checkstring(L, 1);
     double score = luaL_checknumber(L, 2);
-    // metadata is optional — accept a string or nil/none.
+    // metadata is optional: accept a string or nil/none.
     const char* metadata = luaL_optstring(L, 3, "");
-    luaL_checklistener(L, 4, onLeaderboardSetScoreListener);
-    Yes2SDK_leaderboard_setScore(name, score, metadata, Yes2SDKLeaderboard::OnSetScore);
+    int id = Yes2SDKRequests::Register(L, 4, "leaderboard_set_score");
+    Yes2SDK_leaderboard_setScore(name, score, metadata, id, Yes2SDKRequests::Complete);
     return 0;
 }
 int Yes2SDKLeaderboard::GetEntries(lua_State* L) {
     const char* name = luaL_checkstring(L, 1);
     int count = luaL_checkinteger(L, 2);
     int offset = luaL_checkinteger(L, 3);
-    luaL_checklistener(L, 4, onLeaderboardGetEntriesListener);
-    Yes2SDK_leaderboard_getEntries(name, count, offset, Yes2SDKLeaderboard::OnGetEntries);
+    int id = Yes2SDKRequests::Register(L, 4, "leaderboard_get_entries");
+    Yes2SDK_leaderboard_getEntries(name, count, offset, id, Yes2SDKRequests::Complete);
     return 0;
 }
 int Yes2SDKLeaderboard::GetPlayerEntry(lua_State* L) {
     const char* name = luaL_checkstring(L, 1);
-    luaL_checklistener(L, 2, onLeaderboardGetPlayerEntryListener);
-    Yes2SDK_leaderboard_getPlayerEntry(name, Yes2SDKLeaderboard::OnGetPlayerEntry);
+    int id = Yes2SDKRequests::Register(L, 2, "leaderboard_get_player_entry");
+    Yes2SDK_leaderboard_getPlayerEntry(name, id, Yes2SDKRequests::Complete);
     return 0;
 }
 int Yes2SDKLeaderboard::IsSupported(lua_State* L) {
