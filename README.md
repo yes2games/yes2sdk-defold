@@ -175,6 +175,12 @@ no_fill       → no ad available (fires if the platform couldn't deliver)
 after_ad      → resume game (always — fires after the result)
 ```
 
+Every rewarded ad ends with exactly one of `ad_viewed`, `ad_dismissed` or `no_fill`, then `after_ad`, and `after_ad` fires at most once:
+
+- If the platform reports a second result for the same ad, the SDK drops it and logs a warning. The first result wins.
+- If the platform sends `after_ad` without a result, the SDK calls `ad_dismissed` first (with a warning), then `after_ad`. It never calls `ad_viewed` on its own, so a reward is only granted when the platform says the ad was watched.
+- An error raised inside one of your ad callbacks is logged as `[Yes2SDK] <name> callback error: ...` and does not stop the next callback, so an error in `ad_dismissed` still lets `after_ad` resume the game.
+
 > ⚠️ **Do NOT grant rewards in `after_ad`.** `after_ad` fires for completion, dismissal, and no-fill alike — granting rewards there gives them away on skip. Always grant in `ad_viewed`.
 
 #### Concurrent ad guard + readiness
