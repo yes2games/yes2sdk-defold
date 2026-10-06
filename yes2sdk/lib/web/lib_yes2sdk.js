@@ -152,8 +152,8 @@ var Yes2SDKLib = {
         _accountDialogCloseWired: false,
 
         // Minimum injected Core runtime this wrapper build is compatible with.
-        // Distinct from the wrapper's own version (yes2sdk.cpp VERSION) — this is the
-        // Core floor, matching the dashboard's MIN_CORE_BY_ENGINE for Defold.
+        // Distinct from the wrapper's own version (yes2sdk.cpp VERSION): this is the
+        // oldest Yes2SDK runtime this build supports.
         REQUIRED_CORE_VERSION: '2.10.0',
 
         // Compare two semver strings on major.minor.patch (pre-release/build metadata

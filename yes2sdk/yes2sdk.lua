@@ -113,8 +113,9 @@ if not sdk then
   --   mock_rewarded_result = viewed   <- or: dismissed (no-reward path)
   --   mock_ad_result = normal         <- or: nofill (ads fail, no inventory)
   --   mock_purchase_result = success  <- or: fail
-  --   mock_referral_result = shared   <- or: canceled (referrals_share reports canceled)
+  --   mock_referral_result = shared   <- reports {"canceled":false}; or: canceled ({"canceled":true})
   --   mock_subscribe_result = subscribed  <- or: cancelled, fail
+  --   mock_entry_point_data = {}      <- JSON object string for session_get_entry_point_data()
   --
   -- HTML5 keeps the plain warn stub: a missing extension there is a bundling
   -- mistake the developer must see, not something to paper over.
