@@ -7,6 +7,7 @@ A single SDK for your Defold HTML5 game. Integrate once against Yes2SDK, submit 
 
 ## Requirements
 
+- Yes2SDK 2.10.0 or newer for the new APIs (referrals, subscriptions, notifications, context sharing, entry point data, registration prompt, data flush); older runtimes report `FEATURE_NOT_SUPPORTED` for them.
 - Defold 1.10.2 or newer — the oldest version `build.defold.com`, Defold's hosted extension build server, still compiles native extensions for. This SDK *is* a native extension, so on an older Defold the bundle fails at the build server with `HTTP 501 — Engine version '<sha>' is not supported on the current server`, whatever else your project does.
 
   Do not lower this number without first checking that the hosted server accepts the older SDK again. Defold prunes old SDKs from that server as new versions ship, so this floor moves up over time and never down. It is a floor of the hosted server rather than of the engine: Defold still publishes the older SDK archives, so a self-hosted extender may well build further back — untested here, and not something this SDK promises.
@@ -308,7 +309,7 @@ yes2sdk.analytics_log_event("boss_defeated", json.encode({ level = 3, time = 42.
 
 These modules add extra player-facing features. They are **not guaranteed** to be available at runtime — guard with a support check and handle the unsupported case gracefully. Don't make your core gameplay depend on them.
 
-Support checks available: `ads_is_interstitial_supported()`, `ads_is_rewarded_supported()`, `auth_is_supported()`, `player_is_data_supported()`, `friends_is_supported()`, `banners_is_supported()`, `score_is_supported()`, `leaderboard_is_supported()`, `stats_is_supported()`, `config_is_supported()`, `review_is_supported()`, `iap_is_supported()`, `referrals_is_supported()`, `notifications_is_supported()`. (`context_is_supported()` exists too, but it can return false on platforms where sharing works, so do not use it as a gate: see [Context sharing](#context-sharing-image).)
+Support checks available: `ads_is_interstitial_supported()`, `ads_is_rewarded_supported()`, `auth_is_supported()`, `player_is_data_supported()`, `friends_is_supported()`, `banners_is_supported()`, `score_is_supported()`, `leaderboard_is_supported()`, `stats_is_supported()`, `config_is_supported()`, `review_is_supported()`, `iap_is_supported()`, `iap_is_subscription_supported()`, `referrals_is_supported()`, `notifications_is_supported()`. (`context_is_supported()` exists too, but it can return false on platforms where sharing works, so do not use it as a gate: see [Context sharing](#context-sharing-image).)
 
 ```lua
 if yes2sdk.ads_is_rewarded_supported() then
