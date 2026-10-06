@@ -1,8 +1,9 @@
 --- Yes2SDK — High-level Lua API wrapper
 -- @module yes2sdk_api
 
--- Overlapping calls to the same async function each get their own callback, except the
--- single-flight ones (iap_purchase, iap_consume_purchase) that reject a second call while one is open.
+-- Overlapping calls to the same async function each get their own callback. Exceptions:
+-- iap_purchase, iap_consume_purchase and ads_show_* reject a second call while one is open;
+-- initialize and start_game are once per session.
 
 -- Guard: if the native extension isn't loaded (Project > Build instead of Bundle),
 -- create a stub that logs a warning and no-ops all SDK calls.
@@ -1096,9 +1097,9 @@ end
 -- ── IAP (in-app purchases) ──
 
 -- True between an iap_purchase / iap_consume_purchase call and its callback.
--- A re-entrant call would overwrite the in-flight request's single listener slot,
--- silently dropping its callback — for a purchase that means the platform still
--- charges the player but the game never learns, so we reject re-entry instead.
+-- One checkout at a time: a second purchase while one is open could put two
+-- payment prompts in front of the player, so re-entry is rejected (logged, no
+-- callback) until the open call reports back.
 -- If a purchase never settles the flag stays set (further purchases are blocked
 -- for the session, the safe failure); a reload recovers.
 local _iap_purchase_in_flight = false
