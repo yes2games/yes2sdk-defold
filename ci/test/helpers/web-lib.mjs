@@ -16,18 +16,23 @@
 // - Pointers. There is no heap. A "string pointer" is the JS string itself:
 //   tests pass plain strings where C++ would pass a `const char*`, UTF8ToString
 //   returns them unchanged (and maps 0 / null / undefined to "", as Emscripten
-//   does for a null pointer), and stringToUTF8OnStack / allocateUTF8 return the
-//   string they were given, so dyncall args and sync return values read as the
-//   strings the library produced. A callback pointer is any value the test
-//   chooses (a number is clearest).
+//   does for a null pointer), and stringToUTF8OnStack returns the string it was
+//   given, so dyncall args and sync return values read as the strings the
+//   library produced. Those two are the only string helpers the real libraries
+//   use. allocateUTF8, stringToUTF8, lengthBytesUTF8 and _malloc throw: the
+//   libraries must not use them (allocateUTF8 is gone from current Emscripten),
+//   and a later task reaching for one should fail here, not only in Bob.
+//   A callback pointer is any value the test chooses (a number is clearest).
 // - Library registration. addToLibrary(obj), mergeInto(LibraryManager.library,
 //   obj) and autoAddDeps(obj, name) behave like Emscripten's: every key lands in
 //   `exports` under its library name (`Yes2SDK_*`, `$Helper`, `*__deps`). Each
 //   `$Name` helper is bound as the free identifier `Name` in the shared library
 //   scope only when some function lists it in `__deps` (directly or
-//   transitively), which is what decides whether Emscripten emits it; an
-//   undeclared helper therefore throws ReferenceError when used, as it would
-//   in a real build.
+//   transitively), which is what decides whether Emscripten emits it. The
+//   harness pre-declares every helper name so the scope can bind it later, so
+//   an unbound helper reads as `undefined` here where a real build throws
+//   ReferenceError; to compensate, a helper that a library function mentions
+//   but that no `__deps` binds is reported in `problems`.
 // - Scope. All files given in one call are evaluated in ONE function scope, in
 //   order, so a helper defined in lib_yes2sdk.js and used by another library
 //   through `__deps: ['$Yes2SDKBridge']` resolves exactly as it does when Bob
@@ -36,7 +41,7 @@
 //
 // Problems the harness can see but a library cannot report (a dyncall through a
 // null pointer, a dyncall whose argument count does not match its signature, a
-// `__deps` entry nothing defines) are collected in `problems`; tests assert it
+// `__deps` entry nothing defines, a `$Helper` used but never bound by `__deps`) are collected in `problems`; tests assert it
 // is empty.
 //
 // Fidelity limit: Emscripten re-serializes library functions to source text, so
@@ -58,9 +63,6 @@ const HELPER_KEY = /^\s*\$([A-Za-z_]\w*)\s*:/gm;
 const RUNTIME_DEPS = new Set([
     "$UTF8ToString",
     "$stringToUTF8OnStack",
-    "$allocateUTF8",
-    "$stringToUTF8",
-    "$lengthBytesUTF8",
     "$autoAddDeps",
     "malloc",
     "free",
@@ -77,6 +79,15 @@ function rewriteMacros(source, file) {
         const newlines = "\n".repeat((span.match(/\n/g) ?? []).length);
         return `__y2dyn(${JSON.stringify(match[1])}, (${match[2]}))${newlines}`;
     });
+}
+
+function unavailable(name) {
+    return () => {
+        throw new Error(
+            `web-lib harness: ${name} is not modelled and the real libraries do not use it; ` +
+                "use UTF8ToString / stringToUTF8OnStack, strings are passed as JS strings",
+        );
+    };
 }
 
 function formatArgs(args) {
@@ -113,11 +124,10 @@ export function loadWebLib(files, options = {}) {
         console: fakeConsole,
         UTF8ToString: (ptr) => (ptr === 0 || ptr === null || ptr === undefined ? "" : String(ptr)),
         stringToUTF8OnStack: (str) => str,
-        allocateUTF8: (str) => str,
-        lengthBytesUTF8: (str) => Buffer.byteLength(String(str), "utf8"),
-        _malloc: () => {
-            throw new Error("web-lib harness: _malloc is not modelled; strings are passed as JS strings");
-        },
+        allocateUTF8: unavailable("allocateUTF8"),
+        stringToUTF8: unavailable("stringToUTF8"),
+        lengthBytesUTF8: unavailable("lengthBytesUTF8"),
+        _malloc: unavailable("_malloc"),
         _free: () => {},
         addToLibrary: (obj) => Object.assign(library, obj),
         mergeInto: (target, obj) => Object.assign(target, obj),
@@ -198,6 +208,22 @@ export function loadWebLib(files, options = {}) {
             continue;
         }
         bind[name](library[dep]);
+    }
+
+    // A helper some library function mentions but nothing binds through __deps
+    // would be a ReferenceError in a real build.
+    for (const name of names) {
+        if (needed.has(`$${name}`)) {
+            continue;
+        }
+        const mention = new RegExp(`\\b${name}\\b`);
+        for (const key of Object.keys(library)) {
+            if (!isDecorator(key) && !key.startsWith("$") && typeof library[key] === "function") {
+                if (mention.test(library[key].toString())) {
+                    problems.push(`${key} references helper $${name}, which is never bound through __deps`);
+                }
+            }
+        }
     }
 
     return {

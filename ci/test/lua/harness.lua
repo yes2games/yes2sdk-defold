@@ -87,6 +87,9 @@ Fake.__index = Fake
 -- opts.missing   { "name", ... } leave these out, as a broken build would
 -- Every other registered name records the call and returns nil. Indexing a
 -- name the extension does not register raises, so a wrapper typo is caught.
+-- That also means feature detection (`if yes2sdk.some_fn then`) raises, unlike
+-- a real module where it is nil. Pass `lenient = true` to get nil for unknown
+-- names instead, for a test that exercises such a guard.
 function h.fake_native(opts)
   opts = opts or {}
   local fake = setmetatable({ calls = {} }, Fake)
@@ -110,6 +113,7 @@ function h.fake_native(opts)
   end
   setmetatable(module, {
     __index = function(_, key)
+      if opts.lenient then return nil end
       error("fake native: yes2sdk." .. tostring(key) .. " is not a registered native function", 2)
     end,
   })

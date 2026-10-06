@@ -85,7 +85,7 @@ function stubs.new(state)
       }
     end,
     get_engine_info = function()
-      return { version = "1.9.0", version_sha1 = "harness", is_debug = true }
+      return { version = "1.13.1", version_sha1 = "harness", is_debug = true }
     end,
     get_config_string = function(key, default)
       local value = config_value(key, default)
@@ -150,6 +150,8 @@ function stubs.new(state)
   }
 
   -- json: dkjson with Defold's failure semantics (decode raises on bad input).
+  -- Empty tables: dkjson encodes a plain {} as "[]" (Defold behaviour not
+  -- verified here); build an object explicitly if a test needs "{}".
   env.json = {
     null = dkjson.null,
     encode = function(value, options)
@@ -162,7 +164,9 @@ function stubs.new(state)
       if type(text) ~= "string" then
         error("json.decode: expected a string, got " .. type(text), 2)
       end
-      local value, _, err = dkjson.decode(text, 1, nil)
+      -- Explicit nils for the two metatable args: Defold returns plain tables,
+      -- dkjson would otherwise tag them with __jsontype metatables.
+      local value, _, err = dkjson.decode(text, 1, nil, nil, nil)
       if err then error("json.decode: " .. tostring(err), 2) end
       return value
     end,

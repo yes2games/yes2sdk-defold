@@ -98,6 +98,8 @@ end
 function T.json_stub_raises_on_bad_input_like_defold()
   h.load_wrapper{ native = h.fake_native() }
   h.deep_eq(h.env.json.decode('{"a":[1,2]}'), { a = { 1, 2 } })
+  h.eq(getmetatable(h.env.json.decode("{}")), nil)
+  h.eq(getmetatable(h.env.json.decode("[]")), nil)
   h.expect_failure(function() h.env.json.decode("{not json") end)
 end
 
@@ -109,6 +111,19 @@ function T.a_broken_fake_is_reported_as_a_failure()
   h.match(err, "not a registered native function")
   -- And an assertion that should not hold really fails.
   h.expect_failure(function() h.eq(sdk.ads_is_ad_showing(), true) end)
+end
+
+function T.lenient_fake_native_returns_nil_for_unknown_names()
+  local strict = h.fake_native()
+  h.expect_failure(function() return strict.module.not_a_native end)
+  local lenient = h.fake_native{ lenient = true }
+  h.eq(lenient.module.not_a_native, nil)
+  h.truthy(lenient.module.get_platform ~= nil, "registered names still resolve")
+end
+
+function T.fake_engine_info_matches_the_pinned_lane()
+  h.load_wrapper{ native = h.fake_native() }
+  h.eq(h.env.sys.get_engine_info().version, "1.13.1")
 end
 
 function T.timer_callback_errors_are_collected_not_swallowed()

@@ -8,8 +8,19 @@
 
 import assert from "node:assert/strict";
 import { readdirSync } from "node:fs";
+import { mkdtempSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { test } from "node:test";
 import { REPO_ROOT, loadWebLib } from "./helpers/web-lib.mjs";
+
+let fixtureCount = 0;
+const fixtureDir = mkdtempSync(join(tmpdir(), "web-lib-fixture-"));
+function fixture(source) {
+    const path = join(fixtureDir, `lib_fixture_${fixtureCount++}.js`);
+    writeFileSync(path, source);
+    return path;
+}
 
 const SESSION = "yes2sdk/lib/web/lib_yes2sdk_session.js";
 const IAP = "yes2sdk/lib/web/lib_yes2sdk_iap.js";
@@ -102,6 +113,31 @@ test("harness: a dyncall through a null pointer or with the wrong arity is repor
     web.exports.Yes2SDK_iap_getCatalog(0);
     assert.equal(web.dyncalls.length, 1);
     assert.match(web.problems.join("\n"), /null function pointer/);
+    // Wrong arity: sig "vii" takes 2 args, the library calls it with 1.
+    const bad = loadWebLib(fixture('var L = { Yes2SDK_x: function (cb) { {{{ makeDynCall("vii", "cb") }}}(1); } };\naddToLibrary(L);'), {});
+    bad.exports.Yes2SDK_x(7);
+    assert.match(bad.problems.join("\n"), /"vii" expects 2 argument\(s\), got 1/);
+});
+
+test("harness: allocateUTF8, stringToUTF8, lengthBytesUTF8 and _malloc throw", () => {
+    for (const fn of ["allocateUTF8", "stringToUTF8", "lengthBytesUTF8", "_malloc"]) {
+        const web = loadWebLib(fixture(`var L = { Yes2SDK_x: function () { return ${fn}("a"); } };\naddToLibrary(L);`), {});
+        assert.throws(() => web.exports.Yes2SDK_x(), /do not use it/);
+    }
+});
+
+test("harness: a helper used by a function but never bound through __deps is a problem", () => {
+    const unbound = loadWebLib(
+        fixture("var L = {\n$Box: { v: 1 },\nYes2SDK_x: function () { return Box.v; },\n};\naddToLibrary(L);"),
+        {},
+    );
+    assert.match(unbound.problems.join("\n"), /Yes2SDK_x references helper \$Box/);
+    const bound = loadWebLib(
+        fixture("var L = {\n$Box: { v: 1 },\nYes2SDK_x__deps: ['$Box'],\nYes2SDK_x: function () { return Box.v; },\n};\naddToLibrary(L);"),
+        {},
+    );
+    assert.deepEqual(bound.problems, []);
+    assert.equal(bound.exports.Yes2SDK_x(), 1);
 });
 
 test("harness: several libraries share one scope and console is captured", () => {
