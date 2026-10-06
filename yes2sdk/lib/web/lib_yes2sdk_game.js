@@ -35,9 +35,10 @@ var Yes2SDKGameLib = {
     Yes2SDK_game_inviteLink: function (paramsJsonPtr, requestId, callback) {
         var paramsJson = UTF8ToString(paramsJsonPtr) || "{}";
         Yes2SDKBridge.run(callback, requestId, 'game.inviteLink', function () {
-            // Invalid JSON fails here, before Core is called.
+            // Invalid JSON fails here, before Core is called. The thrown code
+            // becomes the error code of the failure payload.
             try { JSON.parse(paramsJson); }
-            catch (e) { throw "Invalid JSON: " + String(e); }
+            catch (e) { throw { code: 'INVALID_PARAM', message: "Invalid JSON: " + String(e) }; }
             return [paramsJson];
         }, function (url) {
             return url || "";

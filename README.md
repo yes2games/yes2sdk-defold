@@ -329,6 +329,63 @@ local settings_json = yes2sdk.game_get_settings()
 
 ---
 
+## Errors
+
+> **Behaviour change:** failure strings used to be free text or a raw JSON dump of whatever the platform rejected with. Every failed callback now receives one JSON shape with a stable `code`. Code that compared or printed the old text should switch to `parse_error`.
+
+When a callback reports `success == false`, its error argument is a JSON string with exactly three string fields:
+
+```json
+{"code":"IAP_PURCHASE_CANCELLED","message":"The player closed the checkout","context":"iap.purchaseAsync"}
+```
+
+- `code`: a stable identifier to branch on. It is the SDK's own code when the failure carries one, otherwise one of the fallbacks below.
+- `message`: human readable text for logs. Do not match on it, it can change.
+- `context`: the call that failed.
+
+Fallback codes added by the extension itself:
+
+| Code | Meaning |
+|---|---|
+| `NOT_INITIALIZED` | The SDK (or the module behind the call) is not loaded yet. Call `initialize` first. |
+| `FEATURE_NOT_SUPPORTED` | The loaded SDK does not provide this call. |
+| `INVALID_PARAM` | The arguments were rejected before the call was made, e.g. a JSON string that does not parse. |
+| `UNKNOWN_ERROR` | Anything else. Check `message`. |
+
+Common SDK codes games may branch on:
+
+| Code | Meaning |
+|---|---|
+| `IAP_PURCHASE_CANCELLED` | The player closed the checkout without paying. Not an error to retry or report. |
+| `IAP_PURCHASE_FAILED` | The purchase did not go through. |
+| `IAP_ALREADY_PURCHASED` | The player already owns this product. |
+| `IAP_NOT_AVAILABLE` | Purchases are not available right now. |
+| `PLAYER_NOT_AUTHENTICATED` | The call needs a signed in player. |
+| `FEATURE_NOT_SUPPORTED`, `PLATFORM_NOT_SUPPORTED` | Not available on this platform. |
+| `NETWORK_FAILURE`, `TIMEOUT` | Transient, usually worth a later retry. |
+| `INVALID_PARAM` | An argument was rejected. |
+| `PLATFORM_ERROR` | The platform reported a failure. |
+
+`yes2sdk.parse_error(err)` turns the error into a table `{ code = string, message = string, context = string }`. It never raises: a plain string that is not this JSON (for example from an older SDK) comes back as `code = "UNKNOWN_ERROR"` with the string as `message`, and `nil` gives an empty message.
+
+```lua
+yes2sdk.iap_purchase("coins_100", nil, function(self, success, result)
+    if success then
+        local purchase = json.decode(result)
+        -- grant, then consume
+    else
+        local err = yes2sdk.parse_error(result)
+        if err.code == "IAP_PURCHASE_CANCELLED" then
+            -- the player changed their mind, nothing to report
+        else
+            print("Purchase failed: " .. err.code .. " (" .. err.message .. ")")
+        end
+    end
+end)
+```
+
+---
+
 ## Integration Checklist
 
 Your build is ready for review when:
@@ -399,7 +456,7 @@ mock_purchase_result = fail
 - `mock = 0` disables the mock entirely (old stub behavior). Default: enabled.
 - `mock_rewarded_result = dismissed` makes rewarded ads fire `ad_dismissed` (no-reward path). Default: `viewed`.
 - `mock_ad_result = nofill` makes ad calls fail with `no_fill`. Default: `normal`.
-- `mock_purchase_result = fail` makes `iap_purchase` fail. Default: `success`.
+- `mock_purchase_result = fail` makes `iap_purchase` fail with an `IAP_PURCHASE_FAILED` error (see [Errors](#errors)). Default: `success`.
 
 The mock is editor/desktop only. HTML5 bundles always use the real platform SDK, and a missing extension in an HTML5 build still prints the loud bundling warning. For richer simulation (specific locales, network conditions), use the QA Inspector in the Yes2Games Dashboard.
 

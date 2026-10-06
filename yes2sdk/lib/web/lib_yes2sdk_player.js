@@ -80,7 +80,8 @@ var Yes2SDKPlayerLib = {
         try { keys = JSON.parse(UTF8ToString(keysJsonPtr) || "[]"); }
         catch (e) {
             // Invalid input fails without calling Core, even when the SDK is missing.
-            Yes2SDKBridge.complete(callback, requestId, false, "Invalid JSON: " + String(e));
+            Yes2SDKBridge.complete(callback, requestId, false,
+                Yes2SDKBridge.errorJson("Invalid JSON: " + String(e), 'INVALID_PARAM', 'player.getDataAsync'));
             return;
         }
         Yes2SDKBridge.run(callback, requestId, 'player.getDataAsync', function () {
@@ -94,7 +95,8 @@ var Yes2SDKPlayerLib = {
         var data;
         try { data = JSON.parse(UTF8ToString(dataJsonPtr) || "{}"); }
         catch (e) {
-            Yes2SDKBridge.complete(callback, requestId, false, "Invalid JSON: " + String(e));
+            Yes2SDKBridge.complete(callback, requestId, false,
+                Yes2SDKBridge.errorJson("Invalid JSON: " + String(e), 'INVALID_PARAM', 'player.setDataAsync'));
             return;
         }
         // Success carries no payload (nil in Lua).

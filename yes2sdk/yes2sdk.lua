@@ -191,7 +191,13 @@ if not sdk then
     function sdk.iap_purchase(product_id, developer_payload, callback)
       if mock_config("mock_purchase_result", "success") == "fail" then
         print("[Yes2SDK] Mock: iap_purchase('" .. tostring(product_id) .. "') failing (mock_purchase_result = fail)")
-        if callback then next_frame(function(tself) callback(tself, false, "Simulated purchase failure (mock)") end) end
+        -- Same error shape the HTML5 bridge delivers (see M.parse_error).
+        local err = json.encode({
+          code = "IAP_PURCHASE_FAILED",
+          message = "Simulated purchase failure (mock)",
+          context = "iap.purchaseAsync",
+        })
+        if callback then next_frame(function(tself) callback(tself, false, err) end) end
         return
       end
       local token, purchase = mock_purchase_json(tostring(product_id), developer_payload)
@@ -243,6 +249,47 @@ local _AD_PLAYING_TIMEOUT = 180
 local _AD_MAX_FRAME_DT = 0.5
 
 local M = {}
+
+-- ── Errors ──
+
+local function _error_field(value, key)
+  local ok, field = pcall(function() return value[key] end)
+  if ok and type(field) == "string" then return field end
+  return nil
+end
+
+--- Parse the error string a failed callback receives.
+-- Failures arrive as '{"code":"...","message":"...","context":"..."}'. Returns a
+-- table { code = string, message = string, context = string }. A plain string
+-- that is not that JSON (an older or third-party message) becomes
+-- { code = "UNKNOWN_ERROR", message = err, context = "" }; nil gives an empty
+-- message; missing fields get these defaults. Never raises.
+-- @param err The error value passed to the callback.
+function M.parse_error(err)
+  local result = { code = "UNKNOWN_ERROR", message = "", context = "" }
+  local value = err
+  if type(err) == "string" then
+    local ok, decoded = pcall(json.decode, err)
+    if ok and type(decoded) == "table" and (_error_field(decoded, "code")
+        or _error_field(decoded, "message") or _error_field(decoded, "context")) then
+      value = decoded
+    else
+      result.message = err
+      return result
+    end
+  elseif err == nil then
+    return result
+  elseif type(err) ~= "table" then
+    local ok, text = pcall(tostring, err)
+    if ok and type(text) == "string" then result.message = text end
+    return result
+  end
+  local code = _error_field(value, "code")
+  if code and code ~= "" then result.code = code end
+  result.message = _error_field(value, "message") or ""
+  result.context = _error_field(value, "context") or ""
+  return result
+end
 
 -- ── Core (mandatory) ──
 

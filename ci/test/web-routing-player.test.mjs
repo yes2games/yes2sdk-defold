@@ -10,6 +10,9 @@ import { loadWebLib } from "./helpers/web-lib.mjs";
 const LIBS = ["yes2sdk/lib/web/lib_yes2sdk.js", "yes2sdk/lib/web/lib_yes2sdk_player.js"];
 const CB = 42;
 
+// The failure payload the bridge hands to Lua: {"code","message","context"}.
+const errorJson = (code, message, context) => JSON.stringify({ code, message, context });
+
 function deferred() {
     let resolve;
     let reject;
@@ -108,7 +111,7 @@ for (const c of CASES) {
         });
         c.call(web, 7);
         await web.flush();
-        assert.deepEqual(completions(web), [[7, 0, JSON.stringify({ code: "X", message: "nope" })]]);
+        assert.deepEqual(completions(web), [[7, 0, errorJson("X", "nope", `player.${c.method}`)]]);
     });
 
     test(`${c.name}: a sync throw completes once with the id`, async () => {
@@ -123,7 +126,7 @@ for (const c of CASES) {
         });
         c.call(web, 8);
         await web.flush();
-        assert.deepEqual(completions(web), [[8, 0, "not on this platform"]]);
+        assert.deepEqual(completions(web), [[8, 0, errorJson("UNKNOWN_ERROR", "not on this platform", `player.${c.method}`)]]);
     });
 
     test(`${c.name}: SDK not loaded completes with its id`, async () => {
@@ -131,7 +134,7 @@ for (const c of CASES) {
             const web = loadWebLib(LIBS, yes2sdk === undefined ? {} : { yes2sdk });
             c.call(web, 9);
             await web.flush();
-            assert.deepEqual(completions(web), [[9, 0, "SDK not initialized"]]);
+            assert.deepEqual(completions(web), [[9, 0, errorJson("NOT_INITIALIZED", "SDK not initialized", `player.${c.method}`)]]);
             assert.deepEqual(web.problems, []);
         }
     });
@@ -168,12 +171,14 @@ test("player_get_data / set_data: invalid JSON fails without calling Core", asyn
     assert.equal(done.length, 2);
     assert.deepEqual([done[0][0], done[0][1]], [4, 0]);
     assert.deepEqual([done[1][0], done[1][1]], [5, 0]);
-    assert.match(done[0][2], /^Invalid JSON: /);
-    assert.match(done[1][2], /^Invalid JSON: /);
+    assert.equal(JSON.parse(done[0][2]).code, "INVALID_PARAM");
+    assert.equal(JSON.parse(done[1][2]).code, "INVALID_PARAM");
+    assert.match(JSON.parse(done[0][2]).message, /^Invalid JSON: /);
+    assert.match(JSON.parse(done[1][2]).message, /^Invalid JSON: /);
     // Even with the SDK missing the JSON error wins, as before.
     const bare = loadWebLib(LIBS, {});
     bare.exports.Yes2SDK_player_getData("{bad", 6, CB);
-    assert.match(completions(bare)[0][2], /^Invalid JSON: /);
+    assert.equal(JSON.parse(completions(bare)[0][2]).code, "INVALID_PARAM");
 });
 
 test("player: arguments reach Core (keys, data, size, payload)", async () => {

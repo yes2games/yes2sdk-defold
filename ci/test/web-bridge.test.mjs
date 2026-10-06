@@ -3,7 +3,9 @@
 //
 //   Yes2SDKBridge.run(cb, id, "module.method", getArgs, mapResult)
 //   Yes2SDKBridge.complete(cb, id, success, payloadString)
-//   Yes2SDKBridge.errorString(err, context)
+//   Yes2SDKBridge.errorJson(err, fallbackCode, context)
+//
+// The error payload contract itself is covered in web-errors.test.mjs.
 //
 // The helper is bound into the library scope only when a function lists it in
 // __deps, so these tests load lib_yes2sdk_iap.js too (it depends on it).
@@ -14,6 +16,9 @@ import { loadWebLib } from "./helpers/web-lib.mjs";
 
 const LIBS = ["yes2sdk/lib/web/lib_yes2sdk.js", "yes2sdk/lib/web/lib_yes2sdk_iap.js"];
 const CB = 9;
+
+// The failure payload the bridge hands to Lua: {"code","message","context"}.
+const errorJson = (code, message, context) => JSON.stringify({ code, message, context });
 
 function load(yes2sdk) {
     const web = loadWebLib(LIBS, yes2sdk === undefined ? {} : { yes2sdk });
@@ -45,14 +50,14 @@ test("bridge: run with no SDK on the page completes once as not initialized", as
     const { web, bridge } = load(undefined);
     bridge.run(CB, 1, "iap.getCatalogAsync");
     await web.flush();
-    assert.deepEqual(argsOf(web), [[1, 0, "SDK not initialized"]]);
+    assert.deepEqual(argsOf(web), [[1, 0, errorJson("NOT_INITIALIZED", "SDK not initialized", "iap.getCatalogAsync")]]);
 });
 
 test("bridge: run with the module missing completes once as not initialized", async () => {
     const { web, bridge } = load({ ads: {} });
     bridge.run(CB, 2, "iap.getCatalogAsync");
     await web.flush();
-    assert.deepEqual(argsOf(web), [[2, 0, "SDK not initialized"]]);
+    assert.deepEqual(argsOf(web), [[2, 0, errorJson("NOT_INITIALIZED", "SDK not initialized", "iap.getCatalogAsync")]]);
 });
 
 test("bridge: run with the method missing completes once as a failure naming it", async () => {
@@ -62,7 +67,9 @@ test("bridge: run with the method missing completes once as a failure naming it"
     const done = argsOf(web);
     assert.equal(done.length, 1);
     assert.deepEqual(done[0].slice(0, 2), [3, 0]);
-    assert.match(done[0][2], /iap\.getCatalogAsync/);
+    const failure = JSON.parse(done[0][2]);
+    assert.equal(failure.code, "FEATURE_NOT_SUPPORTED");
+    assert.match(failure.message, /iap\.getCatalogAsync/);
 });
 
 test("bridge: run calls the method on its module with the given arguments", async () => {
@@ -102,7 +109,7 @@ test("bridge: a throwing mapResult completes once as a failure", async () => {
         throw "bad map";
     });
     await web.flush();
-    assert.deepEqual(argsOf(web), [[8, 0, "bad map"]]);
+    assert.deepEqual(argsOf(web), [[8, 0, errorJson("UNKNOWN_ERROR", "bad map", "iap.a")]]);
 });
 
 test("bridge: a throwing getArgs completes once as a failure", async () => {
@@ -113,7 +120,7 @@ test("bridge: a throwing getArgs completes once as a failure", async () => {
     });
     await web.flush();
     assert.deepEqual(calls, []);
-    assert.deepEqual(argsOf(web), [[9, 0, "bad args"]]);
+    assert.deepEqual(argsOf(web), [[9, 0, errorJson("UNKNOWN_ERROR", "bad args", "iap.a")]]);
 });
 
 test("bridge: a cyclic error object never throws and still completes once", async () => {
@@ -134,31 +141,9 @@ test("bridge: a cyclic error object never throws and still completes once", asyn
     assert.deepEqual(done.map((a) => a[0]).sort(), [10, 11]);
     for (const args of done) {
         assert.equal(args[1], 0);
-        assert.equal(typeof args[2], "string");
+        assert.deepEqual(JSON.parse(args[2]), { code: "UNKNOWN_ERROR", message: "loop", context: args[0] === 10 ? "iap.rejects" : "iap.throws" });
     }
 });
-
-test("bridge: errorString keeps today's semantics and never throws", () => {
-    const { bridge } = load({});
-    assert.equal(bridge.errorString({ code: "X" }, "ctx"), '{"code":"X"}');
-    assert.equal(bridge.errorString("plain", "ctx"), "plain");
-    assert.equal(bridge.errorString(5, "ctx"), "5");
-    assert.equal(bridge.errorString(null, "ctx"), "null");
-    assert.equal(bridge.errorString(undefined, "ctx"), "undefined");
-    const cyclic = {};
-    cyclic.self = cyclic;
-    assert.equal(typeof bridge.errorString(cyclic, "ctx"), "string");
-    const hostile = {
-        toJSON() {
-            throw new Error("no json");
-        },
-        toString() {
-            throw new Error("no string");
-        },
-    };
-    assert.equal(typeof bridge.errorString(hostile, "ctx"), "string");
-});
-
 
 test("bridge: complete gives back the stack it allocates for the payload", () => {
     const { web, bridge } = load({});
@@ -198,5 +183,5 @@ test("bridge: a throwing module getter on the SDK completes once as a failure", 
     const { web, bridge } = load(sdk);
     assert.doesNotThrow(() => bridge.run(CB, 12, "iap.a"));
     await web.flush();
-    assert.deepEqual(argsOf(web), [[12, 0, "getter blew up"]]);
+    assert.deepEqual(argsOf(web), [[12, 0, errorJson("UNKNOWN_ERROR", "getter blew up", "iap.a")]]);
 });
