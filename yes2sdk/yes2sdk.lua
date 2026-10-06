@@ -233,6 +233,10 @@ local _ad_in_flight = false
 -- watchdog can never settle a newer request.
 local _active_request = nil
 
+-- A request no_fill released that still awaits its after_ad, or nil. A retry
+-- started inside no_fill delivers that after_ad first (see _settle_awaiting_request).
+local _awaiting_request = nil
+
 -- Request ids, for log lines.
 local _ad_request_count = 0
 
@@ -414,10 +418,13 @@ local function _deliver_after_ad(request, ...)
     return
   end
   request.after_done = true
+  if _awaiting_request == request then _awaiting_request = nil end
   if request.after_timer then
     timer.cancel(request.after_timer)
     request.after_timer = nil
   end
+  -- A synthesized ad_dismissed takes the same self as the after_ad that follows it.
+  _note_self(request, (...))
   if request.kind == "rewarded" and request.outcome == nil then
     print("[Yes2SDK] rewarded ad " .. request.id .. " reached after_ad with no outcome, reporting ad_dismissed first.")
     _deliver_outcome(request, "dismissed", "ad_dismissed", request.callbacks.ad_dismissed, request.last_self, true)
@@ -432,6 +439,7 @@ local function _end_with_no_fill(request, ...)
   -- the next frame, after_ad is synthesized here.
   _note_self(request, (...))
   request.awaiting_after = true
+  _awaiting_request = request
   _deliver_outcome(request, "no_fill", "no_fill", request.callbacks.no_fill, ...)
   if request.after_done or request.after_timer then return end
   request.after_timer = _next_frame(function(self)
@@ -459,6 +467,7 @@ local function _start_ad_watchdog(request)
       return
     end
     local cb_self = _synth_self(request, self)
+    request.last_self = cb_self
     if phase == "start" and request.outcome == nil then
       print("[Yes2SDK] ad watchdog fired in the start phase: no before_ad after " .. tostring(seconds) .. "s, releasing ad " .. request.id .. " and reporting no_fill.")
       _end_with_no_fill(request, cb_self, true)
@@ -543,6 +552,19 @@ local function _fail_native_call(request, name, err)
   end)
 end
 
+local function _settle_awaiting_request()
+  -- A new ad call while an earlier request still awaits the after_ad that follows
+  -- its no_fill (a retry from inside no_fill): deliver that after_ad now, before
+  -- the native call, so the game resumes from the first ad before the new ad's
+  -- before_ad. Its next-frame timer is cancelled and its own late after_ad is
+  -- swallowed, so it is delivered exactly once.
+  local request = _awaiting_request
+  _awaiting_request = nil
+  if request == nil or request.after_done then return end
+  print("[Yes2SDK] a new ad was requested while ad " .. request.id .. " awaited after_ad, delivering that after_ad first.")
+  _deliver_after_ad(request, request.last_self, true)
+end
+
 local function _reject_concurrent(callback_name, no_fill)
   -- A rejected call gets no_fill only, never after_ad: its after_ad would resume the
   -- game while the ad already in flight is still on screen.
@@ -551,6 +573,7 @@ local function _reject_concurrent(callback_name, no_fill)
 end
 
 function M.ads_show_interstitial(placement, before_ad, after_ad, no_fill)
+  _settle_awaiting_request()
   if _ad_in_flight then
     _reject_concurrent("ads_show_interstitial", no_fill)
     return
@@ -573,6 +596,7 @@ function M.ads_show_interstitial(placement, before_ad, after_ad, no_fill)
 end
 
 function M.ads_show_rewarded(placement, before_ad, after_ad, ad_dismissed, ad_viewed, no_fill)
+  _settle_awaiting_request()
   if _ad_in_flight then
     _reject_concurrent("ads_show_rewarded", no_fill)
     return

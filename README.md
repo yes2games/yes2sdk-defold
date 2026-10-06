@@ -186,7 +186,7 @@ Every rewarded ad ends with exactly one of `ad_viewed`, `ad_dismissed` or `no_fi
 
 #### Concurrent ad guard + readiness
 
-- `yes2sdk.ads_is_ad_showing()` — returns `true` while a `ads_show_interstitial` or `ads_show_rewarded` is in flight (between the call and `after_ad`/`no_fill`). Calling `ads_show_*` again while one is already showing is rejected immediately and `no_fill` fires for the rejected call (no `after_ad` follows it). `ads_is_ad_showing()` is already `false` inside `no_fill`, so you can retry from there.
+- `yes2sdk.ads_is_ad_showing()`: returns `true` while a `ads_show_interstitial` or `ads_show_rewarded` is in flight (between the call and `after_ad`/`no_fill`). Calling `ads_show_*` again while one is already showing is rejected immediately and `no_fill` fires for the rejected call (no `after_ad` follows it). `ads_is_ad_showing()` is already `false` inside `no_fill`, so you can retry once from there, or on the next frame. A retry from inside `no_fill` receives the first ad's `after_ad` first, during the `ads_show_*` call.
 - `yes2sdk.ads_is_rewarded_ad_available()` — best-effort check whether a rewarded ad appears available right now. Most platforms don't expose explicit readiness, so this returns `true` while the platform's ad module is loaded; the actual `ads_show_rewarded` call can still no-fill. Use it as a hint, not a guarantee.
 
 ```lua

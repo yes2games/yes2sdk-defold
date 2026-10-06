@@ -273,4 +273,142 @@ function T.editor_mock_no_fill_is_followed_by_after_ad()
   h.falsy(sdk.ads_is_ad_showing())
 end
 
+-- A retry from inside no_fill gets the first ad's after_ad first, during the
+-- ads_show_* call and before the native call, so the order is always
+-- no_fill(A), after_ad(A), before_ad(B), ..., after_ad(B). Platforms that fire
+-- before_ad as soon as the ad is requested would otherwise resume the game in
+-- after_ad(A) while B is on screen.
+
+local function shared_log()
+  local log = {}
+  local function tag(prefix, name, fn)
+    return function(...)
+      log[#log + 1] = prefix .. "." .. name
+      if fn then return fn(...) end
+    end
+  end
+  return log, tag
+end
+
+function T.retry_with_an_immediate_before_ad_gets_the_first_after_ad_first()
+  local log, tag = shared_log()
+  local calls_at_first_after = nil
+  local fake
+  fake = h.fake_native{ overrides = {
+    -- This platform fires before_ad inside the request itself.
+    ads_show_rewarded = function(_, before) before(h.state.script, true) end,
+  } }
+  local sdk = h.load_wrapper{ native = fake }
+  local showing_in_first_after = "unset"
+  sdk.ads_show_interstitial("menu", tag("A", "before"),
+    tag("A", "after", function()
+      calls_at_first_after = #fake:calls_to("ads_show_rewarded")
+      showing_in_first_after = sdk.ads_is_ad_showing()
+    end),
+    tag("A", "no_fill", function()
+      sdk.ads_show_rewarded("reward", tag("B", "before"), tag("B", "after"),
+        tag("B", "dismissed"), tag("B", "viewed"), tag("B", "no_fill"))
+    end))
+  fake:fire("ads_show_interstitial", I_NO_FILL)
+  h.deep_eq(log, { "A.no_fill", "A.after", "B.before" })
+  h.eq(calls_at_first_after, 0, "after_ad(A) must come before the native call of the retry")
+  h.eq(showing_in_first_after, false)
+  h.truthy(sdk.ads_is_ad_showing(), "the retry is in flight")
+  -- The bridge may still deliver A's real after_ad; it must be swallowed.
+  fake:callback("ads_show_interstitial", I_AFTER)(h.state.script, true)
+  h.advance(1)
+  h.deep_eq(log, { "A.no_fill", "A.after", "B.before" }, "A's after_ad arrived twice or settled B")
+  h.truthy(sdk.ads_is_ad_showing())
+  fake:fire("ads_show_rewarded", R_VIEWED)
+  fake:fire("ads_show_rewarded", R_AFTER)
+  h.deep_eq(log, { "A.no_fill", "A.after", "B.before", "B.viewed", "B.after" })
+  h.falsy(sdk.ads_is_ad_showing())
+  h.eq(h.pending_timers(), 0, "a timer was left running")
+end
+
+function T.retry_from_no_fill_first_after_ad_uses_the_no_fill_self()
+  local fake = h.fake_native()
+  local sdk = h.load_wrapper{ native = fake }
+  local first, cb1, args1 = recorder()
+  local _, cb2 = recorder()
+  show_interstitial(sdk, cb1, { no_fill = cb1("no_fill", function() show_interstitial(sdk, cb2) end) })
+  local caller = { name = "caller" }
+  fake:callback("ads_show_interstitial", I_NO_FILL)(caller, true)
+  h.deep_eq(first, { "no_fill", "after" }, "after_ad(A) was not delivered during the retry")
+  h.eq(args1[2][1], caller, "after_ad(A) must get the self no_fill got")
+  h.eq(args1[2][2], true)
+end
+
+function T.retry_from_no_fill_deferred_variant_keeps_the_order()
+  local log, tag = shared_log()
+  local fake = h.fake_native()
+  local sdk = h.load_wrapper{ native = fake }
+  sdk.ads_show_interstitial("menu", tag("A", "before"), tag("A", "after"),
+    tag("A", "no_fill", function()
+      sdk.ads_show_rewarded("reward", tag("B", "before"), tag("B", "after"),
+        tag("B", "dismissed"), tag("B", "viewed"), tag("B", "no_fill"))
+    end))
+  fake:fire("ads_show_interstitial", I_NO_FILL)
+  h.deep_eq(log, { "A.no_fill", "A.after" })
+  h.advance(1)
+  fake:fire("ads_show_rewarded", R_BEFORE)
+  fake:fire("ads_show_rewarded", R_DISMISSED)
+  fake:fire("ads_show_rewarded", R_AFTER)
+  h.deep_eq(log, { "A.no_fill", "A.after", "B.before", "B.dismissed", "B.after" })
+  h.falsy(sdk.ads_is_ad_showing())
+end
+
+function T.ad_started_inside_the_first_after_ad_rejects_the_retry()
+  -- after_ad(A) is delivered inside the retry call; if the game starts another ad
+  -- from it, that ad owns the latch and the retry is rejected (no_fill only).
+  local log, tag = shared_log()
+  local fake = h.fake_native()
+  local sdk = h.load_wrapper{ native = fake }
+  sdk.ads_show_interstitial("menu", tag("A", "before"),
+    tag("A", "after", function()
+      sdk.ads_show_interstitial("menu", tag("C", "before"), tag("C", "after"), tag("C", "no_fill"))
+    end),
+    tag("A", "no_fill", function()
+      sdk.ads_show_rewarded("reward", tag("B", "before"), tag("B", "after"),
+        tag("B", "dismissed"), tag("B", "viewed"), tag("B", "no_fill"))
+    end))
+  fake:fire("ads_show_interstitial", I_NO_FILL)
+  h.deep_eq(log, { "A.no_fill", "A.after", "B.no_fill" })
+  h.eq(#fake:calls_to("ads_show_rewarded"), 0, "the rejected retry reached the platform")
+  h.eq(#fake:calls_to("ads_show_interstitial"), 2)
+  h.truthy(sdk.ads_is_ad_showing(), "C is in flight")
+  h.advance(1)
+  h.deep_eq(log, { "A.no_fill", "A.after", "B.no_fill" })
+end
+
+function T.editor_mock_retry_from_no_fill_gets_the_first_after_ad_first()
+  local sdk = h.load_wrapper{ system_name = "Darwin", config = { ["yes2sdk.mock_ad_result"] = "nofill" } }
+  local log, tag = shared_log()
+  local retried = false
+  sdk.ads_show_interstitial("menu", tag("A", "before"), tag("A", "after"),
+    tag("A", "no_fill", function()
+      if retried then return end
+      retried = true
+      sdk.ads_show_interstitial("menu", tag("B", "before"), tag("B", "after"), tag("B", "no_fill"))
+    end))
+  h.step()
+  h.deep_eq(log, { "A.no_fill", "A.after" }, "after_ad(A) was not delivered during the retry")
+  h.advance(1)
+  h.deep_eq(log, { "A.no_fill", "A.after", "B.no_fill", "B.after" })
+  h.falsy(sdk.ads_is_ad_showing())
+end
+
+function T.playing_phase_watchdog_gives_dismissed_and_after_ad_one_self()
+  local fake = h.fake_native()
+  local sdk = h.load_wrapper{ native = fake }
+  local events, cb, args = recorder()
+  show_rewarded(sdk, cb)
+  fake:callback("ads_show_rewarded", R_BEFORE)(nil)
+  h.advance(181)
+  h.deep_eq(events, { "before", "dismissed", "after" })
+  h.truthy(args[2][1] ~= nil, "synthesized ad_dismissed got a nil self")
+  h.eq(args[2][1], args[3][1], "ad_dismissed and after_ad got different selfs")
+  h.eq(args[2][2], true)
+end
+
 return T
