@@ -308,7 +308,7 @@ yes2sdk.analytics_log_event("boss_defeated", json.encode({ level = 3, time = 42.
 
 These modules add extra player-facing features. They are **not guaranteed** to be available at runtime — guard with a support check and handle the unsupported case gracefully. Don't make your core gameplay depend on them.
 
-Support checks available: `ads_is_interstitial_supported()`, `ads_is_rewarded_supported()`, `auth_is_supported()`, `player_is_data_supported()`, `friends_is_supported()`, `banners_is_supported()`, `score_is_supported()`, `leaderboard_is_supported()`, `stats_is_supported()`, `config_is_supported()`, `review_is_supported()`, `iap_is_supported()`.
+Support checks available: `ads_is_interstitial_supported()`, `ads_is_rewarded_supported()`, `auth_is_supported()`, `player_is_data_supported()`, `friends_is_supported()`, `banners_is_supported()`, `score_is_supported()`, `leaderboard_is_supported()`, `stats_is_supported()`, `config_is_supported()`, `review_is_supported()`, `iap_is_supported()`, `referrals_is_supported()`.
 
 ```lua
 if yes2sdk.ads_is_rewarded_supported() then
@@ -521,6 +521,32 @@ end
 
 ---
 
+### Referrals
+
+On platforms that support it, a player can invite friends with a referral link and the game can list who joined. Gate it on `referrals_is_supported()`.
+
+```lua
+if yes2sdk.referrals_is_supported() then
+    -- reference is a stable campaign key (required); data reaches the invited player
+    yes2sdk.referrals_share({ reference = "party_mode_v1", data = { from_level = 3 }, title = "Play with me" },
+        function(self, success, result)
+            if success and not json.decode(result).canceled then
+                -- the invite flow was completed
+            end
+        end)
+
+    yes2sdk.referrals_list(function(self, success, result)
+        if success then
+            local list = json.decode(result)
+            -- list.referrals["party_mode_v1"] = { { playerId = "...", joinedAt = "..." }, ... }
+            -- Send list.signedRequest to your server and verify it there before granting any reward.
+        end
+    end)
+end
+```
+
+`referrals_share` options: `reference` (required, a non-empty string), `data` (table), `title`, `text` and `image` (base64 data URL, PNG, JPEG or WebP, at most 2 MB). A missing or empty `reference` fails the callback with `INVALID_PARAM`. Both calls report failures through the usual error JSON (see [Errors](#errors)).
+
 ## Callbacks and script lifetime
 
 - Every async function except the `ads_show_*` calls takes a callback `function(self, success, result)`. Overlapping calls to the same function each get their own callback, with their own result. The exceptions: `iap_purchase`, `iap_consume_purchase` and the `ads_show_*` calls reject a second call while one is open, and `initialize` and `start_game` are called once per session.
@@ -644,6 +670,7 @@ The native extension is HTML5-only. In the Defold editor, `yes2sdk.*` calls run 
 - `initialize` / `start_game` succeed on the next frame
 - **Ads play a timed mock flow** (3s interstitial, 5s rewarded) and then fire the full callback sequence, so pause-resume wiring in `before_ad` / `after_ad` and the reward path in `ad_viewed` are exercised like a real ad
 - **IAP works end to end**: `iap_is_supported()` returns true, `iap_get_catalog` returns a sample catalog, `iap_purchase` accepts any product id and resolves with a realistic purchase payload, and `iap_get_purchases` / `iap_consume_purchase` operate on a session purchase list
+- Referrals work too: `referrals_is_supported()` returns true, `referrals_share` succeeds and `referrals_list` returns an empty list
 - Other modules keep the one-time-warning stub with sensible defaults
 
 Configure the mock in `game.project` (all keys optional):
@@ -655,6 +682,7 @@ mock_rewarded_result = dismissed
 mock_ad_result = nofill
 mock_purchase_result = fail
 mock_entry_point_data = {"invite":"friend1"}
+mock_referral_result = canceled
 ```
 
 - `mock = 0` disables the mock entirely (old stub behavior). Default: enabled.
@@ -662,6 +690,7 @@ mock_entry_point_data = {"invite":"friend1"}
 - `mock_ad_result = nofill` makes ad calls fail with `no_fill`. Default: `normal`.
 - `mock_entry_point_data` is a JSON object string returned by `session_get_entry_point_data()`. Default: `{}`.
 - `mock_purchase_result = fail` makes `iap_purchase` fail with an `IAP_PURCHASE_FAILED` error (see [Errors](#errors)). Default: `success`.
+- `mock_referral_result = canceled` makes `referrals_share` report `{"canceled":true}`. Default: `{"canceled":false}`.
 
 The mock is editor/desktop only. HTML5 bundles always use the real platform SDK, and a missing extension in an HTML5 build still prints the loud bundling warning. For richer simulation (specific locales, network conditions), use the QA Inspector in the Yes2Games Dashboard.
 

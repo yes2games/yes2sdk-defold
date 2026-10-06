@@ -49,6 +49,18 @@ if not sdk then
   function sdk.session_is_audio_enabled() warn() return true end
   function sdk.session_get_entry_point_data() warn() return "{}" end
 
+  -- Referrals: unsupported, and async calls fail on the next frame like a missing SDK.
+  function sdk.referrals_is_supported() warn() return false end
+  local function referrals_not_initialized(callback, context)
+    warn()
+    if not callback then return end
+    local err = json.encode({ code = "NOT_INITIALIZED", message = "SDK not initialized", context = context })
+    local ok, handle = pcall(timer.delay, 0, false, function(tself) callback(tself, false, err) end)
+    if not ok or handle == timer.INVALID_TIMER_HANDLE then callback(nil, false, err) end
+  end
+  function sdk.referrals_share(options_json, callback) referrals_not_initialized(callback, "referrals.shareAsync") end
+  function sdk.referrals_list(callback) referrals_not_initialized(callback, "referrals.listAsync") end
+
   -- ── Editor mock (desktop builds only) ──
   --
   -- Without a mock, ad callbacks never fire in the editor (only the
@@ -64,6 +76,7 @@ if not sdk then
   --   mock_rewarded_result = viewed   <- or: dismissed (no-reward path)
   --   mock_ad_result = normal         <- or: nofill (ads fail, no inventory)
   --   mock_purchase_result = success  <- or: fail
+  --   mock_referral_result = shared   <- or: canceled (referrals_share reports canceled)
   --
   -- HTML5 keeps the plain warn stub: a missing extension there is a bundling
   -- mistake the developer must see, not something to paper over.
@@ -242,6 +255,22 @@ if not sdk then
       end
       print("[Yes2SDK] Mock: iap_consume_purchase succeeded")
       if callback then next_frame(function(tself) callback(tself, true, nil) end) end
+    end
+
+    -- Referrals: sharing succeeds (or reports canceled), the list is empty.
+    function sdk.referrals_is_supported() return true end
+
+    function sdk.referrals_share(options_json, callback)
+      local canceled = mock_config("mock_referral_result", "shared") == "canceled"
+      print("[Yes2SDK] Mock: referrals_share " .. (canceled and "canceled (mock_referral_result = canceled)" or "succeeding"))
+      local result = canceled and '{"canceled":true}' or '{"canceled":false}'
+      if callback then next_frame(function(tself) callback(tself, true, result) end) end
+    end
+
+    function sdk.referrals_list(callback)
+      if callback then
+        next_frame(function(tself) callback(tself, true, '{"referrals":{},"signedRequest":"mock"}') end)
+      end
     end
   end
 end
@@ -1329,6 +1358,53 @@ end
 -- Callback signature: function(self, success, err) where err is nil on success.
 function M.player_flush_data(callback)
   sdk.player_flush_data(callback)
+end
+
+-- ── Referrals ──
+
+-- Return the options as a JSON string with a non-empty string `reference`, or
+-- nil, err_json (INVALID_PARAM).
+local function referral_share_options(options, context)
+  local encoded, err = encode_options(options, context)
+  if err then return nil, err end
+  if encoded == nil then
+    return nil, invalid_param("options.reference is required", context)
+  end
+  local ok, decoded = pcall(json.decode, encoded)
+  if not ok or type(decoded) ~= "table" then
+    return nil, invalid_param("options must be a JSON object with a reference", context)
+  end
+  if type(decoded.reference) ~= "string" or decoded.reference == "" then
+    return nil, invalid_param("options.reference must be a non-empty string", context)
+  end
+  return encoded
+end
+
+--- Open the platform's invite flow with a referral link.
+-- @param options Table (or JSON string): { reference = string (required, a stable campaign key),
+--   data = table (delivered to the invited player), title, text, image (base64 data URL, at most 2 MB) }.
+-- Callback signature: function(self, success, result_json) where result_json is '{"canceled":false}'
+-- (or true when the player closed the flow). Check referrals_is_supported() first.
+function M.referrals_share(options, callback)
+  local encoded, err = referral_share_options(options, "referrals.shareAsync")
+  if err then
+    fail_async(callback, err)
+    return
+  end
+  sdk.referrals_share(encoded, callback)
+end
+
+--- List the players who joined through the current player's referral links.
+-- Callback signature: function(self, success, result_json) where result_json is
+-- '{"referrals":{"<reference>":[{"playerId":"...","joinedAt":"..."}]},"signedRequest":"..."}'.
+-- Verify signedRequest on your server before granting rewards.
+function M.referrals_list(callback)
+  sdk.referrals_list(callback)
+end
+
+--- Check whether referrals are supported on the current platform.
+function M.referrals_is_supported()
+  return sdk.referrals_is_supported()
 end
 
 return M
