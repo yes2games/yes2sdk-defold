@@ -34,14 +34,14 @@ var Yes2SDKGameLib = {
 
     Yes2SDK_game_inviteLink: function (paramsJsonPtr, callback) {
         if (window.Yes2SDK && window.Yes2SDK.game) {
-            var params;
-            try { params = JSON.parse(UTF8ToString(paramsJsonPtr) || "{}"); }
+            var paramsJson = UTF8ToString(paramsJsonPtr) || "{}";
+            try { JSON.parse(paramsJson); }
             catch (e) {
                 {{{ makeDynCall("vii", "callback") }}}(0, Yes2SDKGameUtils.allocateString("Invalid JSON: " + String(e)));
                 return;
             }
             try {
-                window.Yes2SDK.game.inviteLinkAsync(params)
+                window.Yes2SDK.game.inviteLink(paramsJson)
                     .then(function (url) {
                         {{{ makeDynCall("vii", "callback") }}}(1, Yes2SDKGameUtils.allocateString(url || ""));
                     })
@@ -49,7 +49,7 @@ var Yes2SDKGameLib = {
                         {{{ makeDynCall("vii", "callback") }}}(0, Yes2SDKGameUtils.allocateString(String(err)));
                     });
             } catch (e) {
-                // Synchronous throw (e.g. method missing on this platform) never reaches .catch — route it here so the Lua callback still fires.
+                // Synchronous throw (e.g. method missing on this platform) never reaches .catch, so route it here so the Lua callback still fires.
                 {{{ makeDynCall("vii", "callback") }}}(0, Yes2SDKGameUtils.allocateString(typeof e === 'object' ? JSON.stringify(e) : String(e)));
             }
         } else {
@@ -69,7 +69,7 @@ var Yes2SDKGameLib = {
                         {{{ makeDynCall("vii", "callback") }}}(0, Yes2SDKGameUtils.allocateString(typeof err === 'object' ? JSON.stringify(err) : String(err)));
                     });
             } catch (e) {
-                // Synchronous throw (e.g. method missing on this platform) never reaches .catch — route it here so the Lua callback still fires.
+                // Synchronous throw (e.g. method missing on this platform) never reaches .catch, so route it here so the Lua callback still fires.
                 {{{ makeDynCall("vii", "callback") }}}(0, Yes2SDKGameUtils.allocateString(typeof e === 'object' ? JSON.stringify(e) : String(e)));
             }
         } else {
