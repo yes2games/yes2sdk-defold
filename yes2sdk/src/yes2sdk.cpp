@@ -387,6 +387,13 @@ static const luaL_reg Module_methods[] = {
     // Context (image share)
     {"context_share", Yes2SDKContext::Share},
     {"context_is_supported", Yes2SDKContext::IsSupported},
+    // IAP subscriptions
+    {"iap_get_subscriptions", Yes2SDKIap::GetSubscriptions},
+    {"iap_subscribe", Yes2SDKIap::Subscribe},
+    {"iap_cancel_subscription", Yes2SDKIap::CancelSubscription},
+    {"iap_claim_retention_offer", Yes2SDKIap::ClaimRetentionOffer},
+    {"iap_get_subscription_status", Yes2SDKIap::GetSubscriptionStatus},
+    {"iap_is_subscription_supported", Yes2SDKIap::IsSubscriptionSupported},
 
     {0, 0}
 };

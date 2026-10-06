@@ -38,4 +38,38 @@ int Yes2SDKIap::IsSupported(lua_State* L) {
     lua_pushboolean(L, Yes2SDK_iap_isSupported());
     return 1;
 }
+// Subscriptions: same request routing as the calls above.
+int Yes2SDKIap::GetSubscriptions(lua_State* L) {
+    int id = Yes2SDKRequests::Register(L, 1, "iap_get_subscriptions");
+    Yes2SDK_iap_getSubscriptions(id, Yes2SDKRequests::Complete);
+    return 0;
+}
+int Yes2SDKIap::Subscribe(lua_State* L) {
+    const char* productId = luaL_checkstring(L, 1);
+    int id = Yes2SDKRequests::Register(L, 2, "iap_subscribe");
+    Yes2SDK_iap_subscribe(productId, id, Yes2SDKRequests::Complete);
+    return 0;
+}
+int Yes2SDKIap::CancelSubscription(lua_State* L) {
+    const char* productId = luaL_checkstring(L, 1);
+    int id = Yes2SDKRequests::Register(L, 2, "iap_cancel_subscription");
+    Yes2SDK_iap_cancelSubscription(productId, id, Yes2SDKRequests::Complete);
+    return 0;
+}
+int Yes2SDKIap::ClaimRetentionOffer(lua_State* L) {
+    const char* productId = luaL_checkstring(L, 1);
+    int id = Yes2SDKRequests::Register(L, 2, "iap_claim_retention_offer");
+    Yes2SDK_iap_claimRetentionOffer(productId, id, Yes2SDKRequests::Complete);
+    return 0;
+}
+int Yes2SDKIap::GetSubscriptionStatus(lua_State* L) {
+    const char* productId = luaL_checkstring(L, 1);
+    int id = Yes2SDKRequests::Register(L, 2, "iap_get_subscription_status");
+    Yes2SDK_iap_getSubscriptionStatus(productId, id, Yes2SDKRequests::Complete);
+    return 0;
+}
+int Yes2SDKIap::IsSubscriptionSupported(lua_State* L) {
+    lua_pushboolean(L, Yes2SDK_iap_isSubscriptionSupported());
+    return 1;
+}
 #endif
