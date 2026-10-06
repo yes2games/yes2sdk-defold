@@ -2,7 +2,7 @@
 -- @module yes2sdk_api
 
 -- Async/callback APIs (player_get_*, leaderboard_*, stats_*, config_get_flags,
--- review_*, iap_*, banners_get_status, game_get_server_time, game_invite_link, auth_sign_in)
+-- review_*, banners_get_status, game_get_server_time, game_invite_link, auth_sign_in)
 -- track ONE in-flight request per function. Calling the same function again before its
 -- callback fires drops the earlier callback — only the latest one runs. Wait for the
 -- callback (or gate on your own flag) before re-invoking the same call.

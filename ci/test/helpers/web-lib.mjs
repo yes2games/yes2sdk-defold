@@ -23,6 +23,10 @@
 //   libraries must not use them (allocateUTF8 is gone from current Emscripten),
 //   and a later task reaching for one should fail here, not only in Bob.
 //   A callback pointer is any value the test chooses (a number is clearest).
+// - Stack. A fake stack pointer starts at STACK_TOP. stringToUTF8OnStack moves
+//   it down by the UTF-8 length plus 1, as stackAlloc does, stackSave returns
+//   it and stackRestore sets it. `stackPointer()` reads it, so a test can assert
+//   that a completion running outside any wasm frame gives its bytes back.
 // - Library registration. addToLibrary(obj), mergeInto(LibraryManager.library,
 //   obj) and autoAddDeps(obj, name) behave like Emscripten's: every key lands in
 //   `exports` under its library name (`Yes2SDK_*`, `$Helper`, `*__deps`). Each
@@ -63,10 +67,14 @@ const HELPER_KEY = /^\s*\$([A-Za-z_]\w*)\s*:/gm;
 const RUNTIME_DEPS = new Set([
     "$UTF8ToString",
     "$stringToUTF8OnStack",
+    "$stackSave",
+    "$stackRestore",
     "$autoAddDeps",
     "malloc",
     "free",
 ]);
+
+export const STACK_TOP = 65536;
 
 const isDecorator = (key) => key.includes("__");
 
@@ -104,6 +112,7 @@ export function loadWebLib(files, options = {}) {
     const problems = [];
     const console = { log: [], info: [], warn: [], error: [] };
     const library = {};
+    let stackPointer = STACK_TOP;
 
     const window = options.window ?? {};
     if ("yes2sdk" in options) {
@@ -123,7 +132,14 @@ export function loadWebLib(files, options = {}) {
         navigator,
         console: fakeConsole,
         UTF8ToString: (ptr) => (ptr === 0 || ptr === null || ptr === undefined ? "" : String(ptr)),
-        stringToUTF8OnStack: (str) => str,
+        stringToUTF8OnStack: (str) => {
+            stackPointer -= Buffer.byteLength(String(str), "utf8") + 1;
+            return str;
+        },
+        stackSave: () => stackPointer,
+        stackRestore: (sp) => {
+            stackPointer = sp;
+        },
         allocateUTF8: unavailable("allocateUTF8"),
         stringToUTF8: unavailable("stringToUTF8"),
         lengthBytesUTF8: unavailable("lengthBytesUTF8"),
@@ -232,6 +248,7 @@ export function loadWebLib(files, options = {}) {
         problems,
         console,
         window,
+        stackPointer: () => stackPointer,
         async flush(rounds = 5) {
             for (let i = 0; i < rounds; i++) {
                 await new Promise((resolveRound) => setImmediate(resolveRound));

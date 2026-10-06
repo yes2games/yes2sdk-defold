@@ -14,6 +14,7 @@
 #include "yes2sdk_config.h"
 #include "yes2sdk_review.h"
 #include "yes2sdk_iap.h"
+#include "yes2sdk_requests.h"
 #include "luautils.h"
 #include <dmsdk/sdk.h>
 
@@ -360,6 +361,9 @@ dmExtension::Result InitializeYes2SDK(dmExtension::Params *params)
 
 dmExtension::Result FinalizeYes2SDK(dmExtension::Params *params)
 {
+    // Pending requests hold refs into the Lua state being torn down; forget them so a
+    // completion that arrives after a reboot is ignored instead of calling a stale ref.
+    Yes2SDKRequests::Reset();
     return dmExtension::RESULT_OK;
 }
 
