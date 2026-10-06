@@ -168,7 +168,7 @@ end)
 
 Interstitial ads run at natural break points. Rewarded ads run only when the player opts in.
 
-> **Always wrap ad calls in `session_gameplay_stop()` / `session_gameplay_start()`.** Platforms count "active gameplay seconds" for monetization — leaving gameplay running during an ad inflates those numbers and is grounds for rejection.
+> **Always wrap ad calls in `session_gameplay_stop()` / `session_gameplay_start()`.** Platforms count "active gameplay seconds" for monetization: leaving gameplay running during an ad inflates those numbers and is grounds for rejection.
 
 ```lua
 function show_interstitial(self)
@@ -196,7 +196,7 @@ end
 
 #### Rewarded ad firing order
 
-The callbacks fire in this order. Pay attention — getting it wrong silently breaks reward logic:
+The callbacks fire in this order. Pay attention: getting it wrong silently breaks reward logic:
 
 ```text
 before_ad     → pause game (fires when the ad starts; usually skipped on no_fill)
@@ -216,12 +216,12 @@ Every rewarded ad ends with exactly one of `ad_viewed`, `ad_dismissed` or `no_fi
 - An error raised inside one of your ad callbacks is logged as `[Yes2SDK] <name> callback error: ...` and does not stop the next callback, so an error in `ad_dismissed` still lets `after_ad` resume the game.
 - `no_fill` is always followed by `after_ad`, for interstitials too: if the platform sends no `after_ad` by the next frame, the SDK calls it. Resume the game in `after_ad`. The one exception is a call rejected because another ad is already in flight: it gets `no_fill` only, since its `after_ad` would resume the game while the other ad is still on screen. That `no_fill` runs at once, inside the `ads_show_*` call, and with no arguments, so `self` is `nil` there.
 
-> ⚠️ **Do NOT grant rewards in `after_ad`.** `after_ad` fires for completion, dismissal, and no-fill alike — granting rewards there gives them away on skip. Always grant in `ad_viewed`.
+> ⚠️ **Do NOT grant rewards in `after_ad`.** `after_ad` fires for completion, dismissal, and no-fill alike, so granting rewards there gives them away on skip. Always grant in `ad_viewed`.
 
 #### Concurrent ad guard + readiness
 
 - `yes2sdk.ads_is_ad_showing()`: returns `true` while a `ads_show_interstitial` or `ads_show_rewarded` is in flight (between the call and `after_ad`/`no_fill`). Calling `ads_show_*` again while one is already showing is rejected immediately and `no_fill` fires for the rejected call (no `after_ad` follows it). `ads_is_ad_showing()` is already `false` inside `no_fill`, so you can retry once from there, or on the next frame. A retry from inside `no_fill` receives the first ad's `after_ad` first, during the `ads_show_*` call.
-- `yes2sdk.ads_is_rewarded_ad_available()` — best-effort check whether a rewarded ad appears available right now. Most platforms don't expose explicit readiness, so this returns `true` while the platform's ad module is loaded; the actual `ads_show_rewarded` call can still no-fill. Use it as a hint, not a guarantee.
+- `yes2sdk.ads_is_rewarded_ad_available()`: best-effort check whether a rewarded ad appears available right now. Most platforms don't expose explicit readiness, so this returns `true` while the platform's ad module is loaded; the actual `ads_show_rewarded` call can still no-fill. Use it as a hint, not a guarantee.
 
 ```lua
 local can_show_reward = not yes2sdk.ads_is_ad_showing()
@@ -367,14 +367,34 @@ local settings_json = yes2sdk.game_get_settings()
 Gate every purchase UI on `iap_is_supported()`. Product ids are the ones configured for your game on the platform.
 
 ```lua
-local function grant_and_consume(purchase)
-    grant_product(purchase.productId)   -- give the item
-    save_progress()                     -- persist it BEFORE consuming
+-- Purchases waiting to be consumed. iap_consume_purchase takes one call at a
+-- time, so they are consumed one by one: the next starts in the previous callback.
+local consume_queue = {}
+local consuming = false
+
+local function consume_next()
+    local purchase = table.remove(consume_queue, 1)
+    consuming = purchase ~= nil
+    if not purchase then return end
     yes2sdk.iap_consume_purchase(purchase.purchaseToken, function(self, success, error)
         if not success then
+            -- Still unconsumed: iap_get_purchases returns it again on the next launch.
             print("Consume failed: " .. yes2sdk.parse_error(error).code)
         end
+        consume_next()
     end)
+end
+
+local function finish_purchase(purchase)
+    -- Grants are keyed by purchaseToken and saved with the progress, so a purchase
+    -- whose consume failed is not granted a second time on the next launch.
+    if not save_data.granted[purchase.purchaseToken] then
+        grant_product(purchase.productId)              -- give the item
+        save_data.granted[purchase.purchaseToken] = true
+        save_progress()                                -- persist it BEFORE consuming
+    end
+    table.insert(consume_queue, purchase)
+    if not consuming then consume_next() end
 end
 
 -- On launch, after initialize: finish purchases a previous session never completed.
@@ -382,27 +402,27 @@ if yes2sdk.iap_is_supported() then
     yes2sdk.iap_get_purchases(function(self, success, purchases_json)
         if success then
             for _, purchase in ipairs(json.decode(purchases_json)) do
-                grant_and_consume(purchase)
+                finish_purchase(purchase)
             end
         end
     end)
 end
 
--- Buying.
+-- Buying goes through the same queue.
 yes2sdk.iap_purchase("coins_100", nil, function(self, success, result)
     if success then
-        grant_and_consume(json.decode(result))
+        finish_purchase(json.decode(result))
     elseif yes2sdk.parse_error(result).code ~= "IAP_PURCHASE_CANCELLED" then
         show_purchase_failed()
     end
 end)
 ```
 
-- **Finish incomplete purchases on launch.** A purchase can be paid for and then lost to a reload or a crash before the game granted it. `iap_get_purchases` returns every purchase that was not consumed yet; grant and consume each one.
-- **Grant and save before consuming.** Consuming tells the platform the item was delivered. If the game consumes first and then fails to save, the player paid for nothing.
+- **Finish incomplete purchases on launch.** A purchase can be paid for and then lost to a reload or a crash before the game granted it. `iap_get_purchases` returns every purchase that was not consumed yet; grant each one that was not granted before, then consume them one at a time.
+- **Grant and save before consuming.** Consuming tells the platform the item was delivered. If the game consumes first and then fails to save, the player paid for nothing. Key saved grants by `purchaseToken`: a purchase whose consume failed comes back on the next launch and must not be granted twice.
 - **Purchase JSON fields:** `purchaseToken` (pass it to `iap_consume_purchase`), `productId`, `paymentId`, `purchaseTime` (ISO 8601), `developerPayload` (when you passed one), and, where the platform provides them, `signedRequest` (for server verification) and `isSandbox` (`true` when no real money changed hands; grant the item as usual but keep it out of revenue reporting).
 - **Verify server side.** For anything of value, send `signedRequest` to your own server and check it there. Never trust a purchase on the client alone.
-- **One checkout at a time.** A second `iap_purchase` while one is open is rejected: it logs a warning and its callback is never called. The same applies to `iap_consume_purchase`. Wait for the callback before the next call.
+- **One checkout at a time.** A second `iap_purchase` while one is open is rejected: it logs a warning and its callback is never called. The same applies to `iap_consume_purchase`. Wait for the callback before the next call, as the queue above does.
 - The catalog: `iap_get_catalog(callback)` returns a JSON array of products (`productId`, `title`, `description`, `imageUri`, `price`, `priceCurrencyCode`, `priceAmount`); `iap_get_product(product_id, callback)` returns one product, or the literal `"null"` when the id is unknown.
 - Failures carry an error code, see [Errors](#errors). In the editor, purchases run against a mock: `mock_purchase_result = fail` in `game.project` tests the failure path (see [Editor Testing](#editor-testing)).
 
@@ -479,8 +499,8 @@ end
 
 ## Callbacks and script lifetime
 
-- Every async function takes a callback `function(self, success, result)`. Overlapping calls to the same function each get their own callback, with their own result. The exceptions: `iap_purchase`, `iap_consume_purchase` and the `ads_show_*` calls reject a second call while one is open, and `initialize` and `start_game` are called once per session.
-- A call that fails is reported through its callback with `success == false` and an error string, not raised into your script. That includes a call the loaded SDK does not provide (see [Errors](#errors)).
+- Every async function except the `ads_show_*` calls takes a callback `function(self, success, result)`. Overlapping calls to the same function each get their own callback, with their own result. The exceptions: `iap_purchase`, `iap_consume_purchase` and the `ads_show_*` calls reject a second call while one is open, and `initialize` and `start_game` are called once per session.
+- A call that fails at runtime is reported through its callback with `success == false` and an error string, not raised into your script; only wrong argument types raise. That includes a call the loaded SDK does not provide (see [Errors](#errors)).
 - Call SDK functions from a long-lived script, for example the script of your main collection. The callback and the SDK's own timers belong to the script instance that made the call. A script in a collection proxy that gets unloaded, or that is paused with a time step of 0 while an ad is up, can miss its callbacks or delay the ad's release.
 - If the script instance that made a call is deleted before the response arrives, the response is dropped and a warning is logged. Nothing runs against the deleted instance.
 
