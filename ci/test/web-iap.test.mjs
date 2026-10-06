@@ -13,6 +13,9 @@ import { loadWebLib } from "./helpers/web-lib.mjs";
 const LIBS = ["yes2sdk/lib/web/lib_yes2sdk.js", "yes2sdk/lib/web/lib_yes2sdk_iap.js"];
 const CB = 42;
 
+// The failure payload the bridge hands to Lua: {"code","message","context"}.
+const errorJson = (code, message, context) => JSON.stringify({ code, message, context });
+
 function deferred() {
     let resolve;
     let reject;
@@ -81,20 +84,20 @@ test("iap: getCatalog null result reports an empty array", async () => {
     assert.deepEqual(completions(web), [[3, 1, "[]"]]);
 });
 
-test("iap: a rejection completes once with the id and today's error string", async () => {
+test("iap: a rejection completes once with the id and keeps the SDK error code", async () => {
     const web = loadWebLib(LIBS, {
         yes2sdk: { iap: { getCatalogAsync: () => Promise.reject({ code: "PLATFORM_ERROR", message: "nope" }) } },
     });
     web.exports.Yes2SDK_iap_getCatalog(11, CB);
     await web.flush();
-    assert.deepEqual(completions(web), [[11, 0, JSON.stringify({ code: "PLATFORM_ERROR", message: "nope" })]]);
+    assert.deepEqual(completions(web), [[11, 0, errorJson("PLATFORM_ERROR", "nope", "iap.getCatalogAsync")]]);
 });
 
-test("iap: a string rejection is passed through as String(err)", async () => {
+test("iap: a string rejection is UNKNOWN_ERROR with String(err) as the message", async () => {
     const web = loadWebLib(LIBS, { yes2sdk: { iap: { purchaseAsync: () => Promise.reject("cancelled") } } });
     web.exports.Yes2SDK_iap_purchase("coins", "", 12, CB);
     await web.flush();
-    assert.deepEqual(completions(web), [[12, 0, "cancelled"]]);
+    assert.deepEqual(completions(web), [[12, 0, errorJson("UNKNOWN_ERROR", "cancelled", "iap.purchaseAsync")]]);
 });
 
 test("iap: a sync throw completes once with the id", async () => {
@@ -109,7 +112,7 @@ test("iap: a sync throw completes once with the id", async () => {
     });
     web.exports.Yes2SDK_iap_getPurchases(13, CB);
     await web.flush();
-    assert.deepEqual(completions(web), [[13, 0, "not on this platform"]]);
+    assert.deepEqual(completions(web), [[13, 0, errorJson("UNKNOWN_ERROR", "not on this platform", "iap.getPurchasesAsync")]]);
 });
 
 test("iap: a missing method completes once as a failure", async () => {
@@ -120,7 +123,7 @@ test("iap: a missing method completes once as a failure", async () => {
     assert.equal(done.length, 1);
     assert.equal(done[0][0], 14);
     assert.equal(done[0][1], 0);
-    assert.equal(typeof done[0][2], "string");
+    assert.equal(JSON.parse(done[0][2]).code, "FEATURE_NOT_SUPPORTED");
 });
 
 test("iap: SDK not loaded completes every call once with its id", async () => {
@@ -133,11 +136,11 @@ test("iap: SDK not loaded completes every call once with its id", async () => {
         web.exports.Yes2SDK_iap_consumePurchase("tok", 25, CB);
         await web.flush();
         assert.deepEqual(completions(web), [
-            [21, 0, "SDK not initialized"],
-            [22, 0, "SDK not initialized"],
-            [23, 0, "SDK not initialized"],
-            [24, 0, "SDK not initialized"],
-            [25, 0, "SDK not initialized"],
+            [21, 0, errorJson("NOT_INITIALIZED", "SDK not initialized", "iap.getCatalogAsync")],
+            [22, 0, errorJson("NOT_INITIALIZED", "SDK not initialized", "iap.getProductAsync")],
+            [23, 0, errorJson("NOT_INITIALIZED", "SDK not initialized", "iap.purchaseAsync")],
+            [24, 0, errorJson("NOT_INITIALIZED", "SDK not initialized", "iap.getPurchasesAsync")],
+            [25, 0, errorJson("NOT_INITIALIZED", "SDK not initialized", "iap.consumePurchaseAsync")],
         ]);
         assert.deepEqual(web.problems, []);
     }

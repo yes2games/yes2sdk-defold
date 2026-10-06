@@ -14,6 +14,9 @@ const LIBS = [
 ];
 const CB = 42;
 
+// The failure payload the bridge hands to Lua: {"code","message","context"}.
+const errorJson = (code, message, context) => JSON.stringify({ code, message, context });
+
 function deferred() {
     let resolve;
     let reject;
@@ -127,7 +130,7 @@ for (const c of CASES) {
         const web = loadWebLib(LIBS, { yes2sdk: { [c.mod]: mod } });
         web.exports[c.fn](...c.pre, 7, CB);
         await web.flush();
-        assert.deepEqual(completions(web), [[7, 0, JSON.stringify({ code: "X", message: "no" })]]);
+        assert.deepEqual(completions(web), [[7, 0, errorJson("X", "no", `${c.mod}.${c.method}`)]]);
     });
 
     test(`${c.name}: SDK not loaded completes with its id`, async () => {
@@ -135,7 +138,7 @@ for (const c of CASES) {
             const web = loadWebLib(LIBS, yes2sdk === undefined ? {} : { yes2sdk });
             web.exports[c.fn](...c.pre, 9, CB);
             await web.flush();
-            assert.deepEqual(completions(web), [[9, 0, "SDK not initialized"]]);
+            assert.deepEqual(completions(web), [[9, 0, errorJson("NOT_INITIALIZED", "SDK not initialized", `${c.mod}.${c.method}`)]]);
         }
     });
 
@@ -148,7 +151,7 @@ for (const c of CASES) {
         const web = loadWebLib(LIBS, { yes2sdk: { [c.mod]: mod } });
         web.exports[c.fn](...c.pre, 8, CB);
         await web.flush();
-        assert.deepEqual(completions(web), [[8, 0, "boom"]]);
+        assert.deepEqual(completions(web), [[8, 0, errorJson("UNKNOWN_ERROR", "boom", `${c.mod}.${c.method}`)]]);
     });
 
     test(`${c.name}: null result mapping and bridge dependency`, async () => {
@@ -191,7 +194,8 @@ test("game_invite_link: invalid JSON fails without calling Core", async () => {
     assert.equal(done.length, 1);
     assert.equal(done[0][0], 3);
     assert.equal(done[0][1], 0);
-    assert.match(done[0][2], /^Invalid JSON: /);
+    assert.equal(JSON.parse(done[0][2]).code, "INVALID_PARAM");
+    assert.match(JSON.parse(done[0][2]).message, /^Invalid JSON: /);
 });
 
 test("friends_list_friends passes page and size", async () => {

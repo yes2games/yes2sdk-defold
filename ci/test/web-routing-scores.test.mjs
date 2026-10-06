@@ -15,6 +15,9 @@ const LIBS = [
 ];
 const CB = 42;
 
+// The failure payload the bridge hands to Lua: {"code","message","context"}.
+const errorJson = (code, message, context) => JSON.stringify({ code, message, context });
+
 // exportName, module, core method, extra args before (requestId, cb), resolved value,
 // payload for that value, payload for a null resolution.
 const CASES = [
@@ -82,7 +85,7 @@ for (const [name, mod, method, args, value, payload] of CASES) {
         const web = loadWebLib(LIBS, fake(mod, method, () => Promise.reject({ code: "X", message: "no" })));
         web.exports[name](...args, 7, CB);
         await web.flush();
-        assert.deepEqual(completions(web), [[7, 0, JSON.stringify({ code: "X", message: "no" })]]);
+        assert.deepEqual(completions(web), [[7, 0, errorJson("X", "no", `${mod}.${method}`)]]);
     });
 
     test(`${name}: a sync throw completes once as a failure`, async () => {
@@ -94,7 +97,7 @@ for (const [name, mod, method, args, value, payload] of CASES) {
         );
         web.exports[name](...args, 8, CB);
         await web.flush();
-        assert.deepEqual(completions(web), [[8, 0, "unsupported"]]);
+        assert.deepEqual(completions(web), [[8, 0, errorJson("UNKNOWN_ERROR", "unsupported", `${mod}.${method}`)]]);
     });
 
     test(`${name}: SDK not loaded completes with the id`, async () => {
@@ -102,7 +105,7 @@ for (const [name, mod, method, args, value, payload] of CASES) {
             const web = loadWebLib(LIBS, opts);
             web.exports[name](...args, 9, CB);
             await web.flush();
-            assert.deepEqual(completions(web), [[9, 0, "SDK not initialized"]]);
+            assert.deepEqual(completions(web), [[9, 0, errorJson("NOT_INITIALIZED", "SDK not initialized", `${mod}.${method}`)]]);
         }
     });
 
@@ -167,13 +170,14 @@ test("stats: invalid JSON fails with the id without calling Core, even with the 
         assert.equal(done.length, 1, name);
         assert.equal(done[0][0], 15);
         assert.equal(done[0][1], 0);
-        assert.match(done[0][2], /^Invalid JSON: /);
+        assert.equal(JSON.parse(done[0][2]).code, "INVALID_PARAM");
+        assert.match(JSON.parse(done[0][2]).message, /^Invalid JSON: /);
         assert.equal(called, false);
         // An empty string is valid and means the default for that call.
         const web2 = loadWebLib(LIBS, {});
         web2.exports[name]("", 16, CB);
         await web2.flush();
-        assert.deepEqual(completions(web2), [[16, 0, "SDK not initialized"]], defaults);
+        assert.equal(JSON.parse(completions(web2)[0][2]).code, "NOT_INITIALIZED", defaults);
     }
 });
 

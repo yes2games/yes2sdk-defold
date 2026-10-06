@@ -6,18 +6,20 @@ var Yes2SDKStatsLib = {
     // only valid until then.
 
     // Invalid JSON fails the request without calling Core, and before the SDK is
-    // looked up, as before. An empty string means the default for that call.
-    $Yes2SDKStatsParse: function (ptr, fallback, requestId, callback) {
+    // looked up, as before, with an INVALID_PARAM error. An empty string means the
+    // default for that call.
+    $Yes2SDKStatsParse: function (ptr, fallback, requestId, callback, context) {
         try {
             return { value: JSON.parse(UTF8ToString(ptr) || fallback) };
         } catch (e) {
-            Yes2SDKBridge.complete(callback, requestId, 0, 'Invalid JSON: ' + String(e));
+            Yes2SDKBridge.complete(callback, requestId, 0,
+                Yes2SDKBridge.errorJson('Invalid JSON: ' + String(e), 'INVALID_PARAM', context));
             return null;
         }
     },
 
     Yes2SDK_stats_get: function (keysJsonPtr, requestId, callback) {
-        var parsed = Yes2SDKStatsParse(keysJsonPtr, '[]', requestId, callback);
+        var parsed = Yes2SDKStatsParse(keysJsonPtr, '[]', requestId, callback, 'stats.getStatsAsync');
         if (!parsed) return;
         Yes2SDKBridge.run(callback, requestId, 'stats.getStatsAsync', function () {
             return [parsed.value];
@@ -27,7 +29,7 @@ var Yes2SDKStatsLib = {
     },
 
     Yes2SDK_stats_set: function (statsJsonPtr, requestId, callback) {
-        var parsed = Yes2SDKStatsParse(statsJsonPtr, '{}', requestId, callback);
+        var parsed = Yes2SDKStatsParse(statsJsonPtr, '{}', requestId, callback, 'stats.setStatsAsync');
         if (!parsed) return;
         // setStatsAsync resolves void: report success with no payload.
         Yes2SDKBridge.run(callback, requestId, 'stats.setStatsAsync', function () {
@@ -38,7 +40,7 @@ var Yes2SDKStatsLib = {
     },
 
     Yes2SDK_stats_increment: function (incrementsJsonPtr, requestId, callback) {
-        var parsed = Yes2SDKStatsParse(incrementsJsonPtr, '{}', requestId, callback);
+        var parsed = Yes2SDKStatsParse(incrementsJsonPtr, '{}', requestId, callback, 'stats.incrementStatsAsync');
         if (!parsed) return;
         Yes2SDKBridge.run(callback, requestId, 'stats.incrementStatsAsync', function () {
             return [parsed.value];
