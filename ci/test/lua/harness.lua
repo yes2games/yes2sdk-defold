@@ -176,12 +176,43 @@ function h.load_wrapper(opts)
   env.yes2sdk = native or nil
   setmetatable(env, { __index = _G })
 
-  local chunk, err = loadfile(h.root .. h.wrapper_path)
+  local chunk, err
+  if opts.internals then
+    -- Test-only seam: expose chosen file-level locals without adding anything
+    -- to the public module. The single trailing `return M` becomes
+    -- `return M, { name = name, ... }`; same chunk name keeps error lines.
+    local f, ferr = io.open(h.root .. h.wrapper_path, "rb")
+    if not f then error("cannot read wrapper: " .. tostring(ferr), 2) end
+    local src = f:read("*a")
+    f:close()
+    local pairs_src = {}
+    for _, name in ipairs(opts.internals) do
+      pairs_src[#pairs_src + 1] = name .. " = " .. name
+    end
+    local replaced, count = src:gsub("\nreturn M%s*$", function()
+      return "\nreturn M, { " .. table.concat(pairs_src, ", ") .. " }\n"
+    end)
+    assert(count == 1, "expected exactly one trailing 'return M', found " .. count)
+    chunk, err = loadstring(replaced, "@" .. h.wrapper_path)
+  else
+    chunk, err = loadfile(h.root .. h.wrapper_path)
+  end
   if not chunk then error("cannot load wrapper: " .. tostring(err), 2) end
   setfenv(chunk, env)
-  local module = chunk()
+  local module, internals = chunk()
   h.env = env
-  return module
+  return module, internals
+end
+
+--- Load a fresh wrapper and also return the named file-level locals:
+--   local sdk, i = h.load_internals({ native = fake }, { "encode_options" })
+-- names defaults to the shared option helpers. Test-only.
+function h.load_internals(opts, names)
+  opts = opts or {}
+  local copy = {}
+  for k, v in pairs(opts) do copy[k] = v end
+  copy.internals = names or { "encode_options", "fail_async", "invalid_param" }
+  return h.load_wrapper(copy)
 end
 
 -- -------------------------------------------------------------------------
