@@ -325,6 +325,9 @@ local function _new_ad_request(kind)
     timer = nil,            -- watchdog timer handle
     callbacks = {},         -- the game's callbacks for this request
     last_self = nil,        -- last self a platform callback passed
+    awaiting_after = false, -- released by no_fill; the after_ad that follows is delivered
+    after_timer = nil,      -- next-frame timer that synthesizes after_ad after no_fill
+    before_dropped = false, -- a late before_ad was dropped (warn once)
   }
 end
 
@@ -346,11 +349,21 @@ local function _release_ad(request)
   return true
 end
 
+local _traceback = debug and debug.traceback
+
+local function _on_callback_error(err)
+  if _traceback then return _traceback(tostring(err), 2) end
+  return tostring(err)
+end
+
 local function _call_ad_callback(name, cb, ...)
-  -- Every user ad callback runs through pcall: a callback that raises is logged
-  -- and never stops the next step (a throwing ad_dismissed still gets after_ad).
+  -- Every user ad callback runs behind a protected call: a callback that raises is
+  -- logged with a traceback and never stops the next step (a throwing ad_dismissed
+  -- still gets after_ad). Lua 5.1 xpcall passes no arguments, hence the closure.
   if not cb then return end
-  local ok, err = pcall(cb, ...)
+  local n = select("#", ...)
+  local args = { ... }
+  local ok, err = xpcall(function() return cb(unpack(args, 1, n)) end, _on_callback_error)
   if not ok then
     print("[Yes2SDK] " .. name .. " callback error: " .. tostring(err))
   end
@@ -360,6 +373,23 @@ local function _note_self(request, self)
   -- Remember the last self the platform passed for this request, so callbacks the
   -- wrapper synthesizes later get the same self the real ones did.
   if self ~= nil then request.last_self = self end
+end
+
+local function _synth_self(request, fallback)
+  -- The self for a synthesized callback: the last one seen for this request, else
+  -- the self of the timer that synthesizes it. Synthesized callbacks take (self, true).
+  if request.last_self ~= nil then return request.last_self end
+  return fallback
+end
+
+local function _next_frame(fn)
+  -- Run fn(self) on the next frame. If no timer can be created, run it now so the
+  -- game still gets its callback.
+  local ok, handle = pcall(timer.delay, 0, false, fn)
+  if ok then return handle end
+  print("[Yes2SDK] could not create a timer (" .. tostring(handle) .. "), delivering the ad callback now.")
+  fn(nil)
+  return nil
 end
 
 local function _deliver_outcome(request, outcome, name, cb, ...)
@@ -384,11 +414,32 @@ local function _deliver_after_ad(request, ...)
     return
   end
   request.after_done = true
+  if request.after_timer then
+    timer.cancel(request.after_timer)
+    request.after_timer = nil
+  end
   if request.kind == "rewarded" and request.outcome == nil then
     print("[Yes2SDK] rewarded ad " .. request.id .. " reached after_ad with no outcome, reporting ad_dismissed first.")
     _deliver_outcome(request, "dismissed", "ad_dismissed", request.callbacks.ad_dismissed, request.last_self, true)
   end
   _call_ad_callback("after_ad", request.callbacks.after_ad, ...)
+end
+
+local function _end_with_no_fill(request, ...)
+  -- The request is already released (latch free, so the game may retry from inside
+  -- no_fill). no_fill does not end it: the platform's own after_ad for this request
+  -- usually follows in the same tick and is delivered once. If none has arrived by
+  -- the next frame, after_ad is synthesized here.
+  _note_self(request, (...))
+  request.awaiting_after = true
+  _deliver_outcome(request, "no_fill", "no_fill", request.callbacks.no_fill, ...)
+  if request.after_done or request.after_timer then return end
+  request.after_timer = _next_frame(function(self)
+    request.after_timer = nil
+    if request.after_done then return end
+    print("[Yes2SDK] no after_ad followed no_fill for ad " .. request.id .. ", delivering after_ad.")
+    _deliver_after_ad(request, _synth_self(request, self), true)
+  end)
 end
 
 local function _start_ad_watchdog(request)
@@ -407,12 +458,13 @@ local function _start_ad_watchdog(request)
     if not _release_ad(request) then
       return
     end
-    -- Synthesized callbacks take (self, true), like the native bridge.
-    local cb_self = request.last_self
-    if cb_self == nil then cb_self = self end
-    if phase == "start" then
+    local cb_self = _synth_self(request, self)
+    if phase == "start" and request.outcome == nil then
       print("[Yes2SDK] ad watchdog fired in the start phase: no before_ad after " .. tostring(seconds) .. "s, releasing ad " .. request.id .. " and reporting no_fill.")
-      _deliver_outcome(request, "no_fill", "no_fill", request.callbacks.no_fill, cb_self, true)
+      _end_with_no_fill(request, cb_self, true)
+    elseif phase == "start" then
+      print("[Yes2SDK] ad watchdog fired in the start phase: no before_ad after " .. tostring(seconds) .. "s, releasing ad " .. request.id .. " and reporting after_ad, since its outcome is known.")
+      _deliver_after_ad(request, cb_self, true)
     else
       print("[Yes2SDK] ad watchdog fired in the playing phase: no after_ad " .. tostring(seconds) .. "s after before_ad, releasing ad " .. request.id .. " and reporting after_ad.")
       _deliver_after_ad(request, cb_self, true)
@@ -421,19 +473,23 @@ local function _start_ad_watchdog(request)
 end
 
 local function _wrap_after_ad(request)
-  -- after_ad is terminal: it releases the request, then delivers. A stale after_ad
-  -- (its request already released) is swallowed.
+  -- after_ad releases the request, then delivers. It is also delivered once to a
+  -- request that no_fill already released (no_fill is followed by after_ad). Any
+  -- other after_ad of a released request is stale and swallowed.
   return function(...)
     _note_self(request, (...))
     if _release_ad(request) then
+      _deliver_after_ad(request, ...)
+    elseif request.awaiting_after and not request.after_done then
       _deliver_after_ad(request, ...)
     end
   end
 end
 
 local function _wrap_no_fill(request)
-  -- no_fill is terminal and an outcome. It is dropped when the request already has
-  -- an outcome (the after_ad that follows will settle the request) or was released.
+  -- no_fill is an outcome and releases the request at once; after_ad follows it
+  -- (see _end_with_no_fill). It is dropped when the request already has an outcome
+  -- (the after_ad that follows settles the request) or was released.
   return function(...)
     _note_self(request, (...))
     if request.outcome ~= nil then
@@ -441,7 +497,7 @@ local function _wrap_no_fill(request)
       return
     end
     if _release_ad(request) then
-      _deliver_outcome(request, "no_fill", "no_fill", request.callbacks.no_fill, ...)
+      _end_with_no_fill(request, ...)
     end
   end
 end
@@ -455,12 +511,19 @@ local function _wrap_ad_event(request, kind)
   return function(...)
     _note_self(request, (...))
     if kind == "before_ad" then
-      if not request.released then
-        -- The ad is on screen: switch the watchdog to the playing phase.
-        request.started = true
-        request.elapsed = 0
-        request.deadline = _AD_PLAYING_TIMEOUT
+      if request.released then
+        -- A late before_ad of a released request would pause the game with no
+        -- after_ad left to resume it.
+        if not request.before_dropped then
+          request.before_dropped = true
+          print("[Yes2SDK] before_ad dropped for ad " .. request.id .. ": the ad was already released.")
+        end
+        return
       end
+      -- The ad is on screen: switch the watchdog to the playing phase.
+      request.started = true
+      request.elapsed = 0
+      request.deadline = _AD_PLAYING_TIMEOUT
       _call_ad_callback("before_ad", request.callbacks.before_ad, ...)
     elseif kind == "ad_viewed" then
       _deliver_outcome(request, "viewed", "ad_viewed", request.callbacks.ad_viewed, ...)
@@ -471,20 +534,25 @@ local function _wrap_ad_event(request, kind)
 end
 
 local function _fail_native_call(request, name, err)
-  if _release_ad(request) then
-    print("[Yes2SDK] " .. name .. " native call failed: " .. tostring(err) .. ", reporting no_fill.")
-    _deliver_outcome(request, "no_fill", "no_fill", request.callbacks.no_fill, request.last_self, true)
-  end
+  -- The native call raised, so the platform will send nothing for this request.
+  -- Release now; no_fill (then after_ad) arrives on the next frame with the timer's self.
+  if not _release_ad(request) then return end
+  print("[Yes2SDK] " .. name .. " native call failed: " .. tostring(err) .. ", reporting no_fill.")
+  _next_frame(function(self)
+    _end_with_no_fill(request, _synth_self(request, self), true)
+  end)
 end
 
-local function _reject_concurrent(callback_name)
-  print("[Yes2SDK] " .. callback_name .. " rejected — another ad is already in flight (AdAlreadyShowing). Wait for after_ad/no_fill before calling Show* again.")
+local function _reject_concurrent(callback_name, no_fill)
+  -- A rejected call gets no_fill only, never after_ad: its after_ad would resume the
+  -- game while the ad already in flight is still on screen.
+  print("[Yes2SDK] " .. callback_name .. " rejected: another ad is already in flight (AdAlreadyShowing). This call gets no_fill only. Wait for after_ad or no_fill before calling ads_show_* again.")
+  _call_ad_callback("no_fill", no_fill)
 end
 
 function M.ads_show_interstitial(placement, before_ad, after_ad, no_fill)
   if _ad_in_flight then
-    _reject_concurrent("ads_show_interstitial")
-    if no_fill then no_fill() end
+    _reject_concurrent("ads_show_interstitial", no_fill)
     return
   end
   local request = _new_ad_request("interstitial")
@@ -506,8 +574,7 @@ end
 
 function M.ads_show_rewarded(placement, before_ad, after_ad, ad_dismissed, ad_viewed, no_fill)
   if _ad_in_flight then
-    _reject_concurrent("ads_show_rewarded")
-    if no_fill then no_fill() end
+    _reject_concurrent("ads_show_rewarded", no_fill)
     return
   end
   local request = _new_ad_request("rewarded")

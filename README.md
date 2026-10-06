@@ -143,7 +143,7 @@ function show_interstitial(self)
     yes2sdk.ads_show_interstitial("level-end",
         function(self) end,                                  -- before_ad: pause
         function(self) yes2sdk.session_gameplay_start() end, -- after_ad: resume
-        function(self) yes2sdk.session_gameplay_start() end  -- no_fill: resume immediately
+        function(self) end                                   -- no_fill: no ad, after_ad follows
     )
 end
 
@@ -155,7 +155,7 @@ function show_rewarded(self)
         function(self) yes2sdk.session_gameplay_start() end,      -- after_ad: resume
         function(self) yes2sdk.session_gameplay_start() end,      -- ad_dismissed: no reward
         function(self) grant_extra_life() end,                    -- ad_viewed: GRANT REWARD
-        function(self) yes2sdk.session_gameplay_start() end       -- no_fill: resume
+        function(self) end                                        -- no_fill: no reward, after_ad follows
     )
 end
 ```
@@ -172,7 +172,7 @@ ad_viewed     → grant reward (ONLY fires if the player watched the full ad)
 ad_dismissed  → no reward (fires if the player skipped/closed early)
    — or —
 no_fill       → no ad available (fires if the platform couldn't deliver)
-after_ad      → resume game (always — fires after the result)
+after_ad      → resume game (always, fires after the result, no_fill included)
 ```
 
 Every rewarded ad ends with exactly one of `ad_viewed`, `ad_dismissed` or `no_fill`, then `after_ad`, and `after_ad` fires at most once:
@@ -180,12 +180,13 @@ Every rewarded ad ends with exactly one of `ad_viewed`, `ad_dismissed` or `no_fi
 - If the platform reports a second result for the same ad, the SDK drops it and logs a warning. The first result wins.
 - If the platform sends `after_ad` without a result, the SDK calls `ad_dismissed` first (with a warning), then `after_ad`. It never calls `ad_viewed` on its own, so a reward is only granted when the platform says the ad was watched.
 - An error raised inside one of your ad callbacks is logged as `[Yes2SDK] <name> callback error: ...` and does not stop the next callback, so an error in `ad_dismissed` still lets `after_ad` resume the game.
+- `no_fill` is always followed by `after_ad`, for interstitials too: if the platform sends no `after_ad` by the next frame, the SDK calls it. Resume the game in `after_ad`. The one exception is a call rejected because another ad is already in flight: it gets `no_fill` only, since its `after_ad` would resume the game while the other ad is still on screen.
 
 > ⚠️ **Do NOT grant rewards in `after_ad`.** `after_ad` fires for completion, dismissal, and no-fill alike — granting rewards there gives them away on skip. Always grant in `ad_viewed`.
 
 #### Concurrent ad guard + readiness
 
-- `yes2sdk.ads_is_ad_showing()` — returns `true` while a `ads_show_interstitial` or `ads_show_rewarded` is in flight (between the call and `after_ad`/`no_fill`). Calling `ads_show_*` again while one is already showing is rejected immediately and `no_fill` fires for the rejected call.
+- `yes2sdk.ads_is_ad_showing()` — returns `true` while a `ads_show_interstitial` or `ads_show_rewarded` is in flight (between the call and `after_ad`/`no_fill`). Calling `ads_show_*` again while one is already showing is rejected immediately and `no_fill` fires for the rejected call (no `after_ad` follows it). `ads_is_ad_showing()` is already `false` inside `no_fill`, so you can retry from there.
 - `yes2sdk.ads_is_rewarded_ad_available()` — best-effort check whether a rewarded ad appears available right now. Most platforms don't expose explicit readiness, so this returns `true` while the platform's ad module is loaded; the actual `ads_show_rewarded` call can still no-fill. Use it as a hint, not a guarantee.
 
 ```lua
@@ -339,7 +340,7 @@ Your build is ready for review when:
 - [ ] Interstitial ads run at natural break points
 - [ ] Rewarded ads grant reward **only** in `ad_viewed`
 - [ ] `session_gameplay_stop()` is called before every ad; `session_gameplay_start()` after
-- [ ] Gameplay resumes in `after_ad` AND `no_fill`
+- [ ] Gameplay resumes in `after_ad` (`no_fill` is followed by `after_ad`)
 - [ ] `data_*` functions are used for persistent player data
 
 The QA Inspector in the Yes2Games Dashboard validates all of this automatically.
