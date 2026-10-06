@@ -6,6 +6,18 @@ var Yes2SDKAdsLib = {
         _adDismissedPtr: null,
         _adViewedPtr: null,
         _noFillPtr: null,
+        _activeId: 0,
+
+        // Wraps one handler so it only runs while ad `myId` is still the newest request.
+        _guard: function (myId, event) {
+            return function () {
+                if (myId !== Yes2SDKAdsCallbacks._activeId) {
+                    console.warn("[Yes2SDK] ignoring " + event + " from an ad that is no longer current");
+                    return;
+                }
+                Yes2SDKAdsCallbacks[event]();
+            };
+        },
 
         beforeAd: function () {
             if (Yes2SDKAdsCallbacks._beforeAdPtr) {
@@ -59,6 +71,7 @@ var Yes2SDKAdsLib = {
     },
 
     Yes2SDK_ads_showInterstitial: function (placementPtr, beforeAd, afterAd, noFill) {
+        var myId = ++Yes2SDKAdsCallbacks._activeId;
         Yes2SDKAdsCallbacks._beforeAdPtr = beforeAd;
         Yes2SDKAdsCallbacks._afterAdPtr = afterAd;
         Yes2SDKAdsCallbacks._adDismissedPtr = null;
@@ -70,21 +83,22 @@ var Yes2SDKAdsLib = {
                 window.Yes2SDK.ads.showInterstitial(
                     UTF8ToString(placementPtr),
                     {
-                        beforeAd: Yes2SDKAdsCallbacks.beforeAd,
-                        afterAd: Yes2SDKAdsCallbacks.afterAd,
-                        noFill: Yes2SDKAdsCallbacks.noFill
+                        beforeAd: Yes2SDKAdsCallbacks._guard(myId, "beforeAd"),
+                        afterAd: Yes2SDKAdsCallbacks._guard(myId, "afterAd"),
+                        noFill: Yes2SDKAdsCallbacks._guard(myId, "noFill")
                     }
                 );
             } catch (e) {
                 console.error("[Yes2SDK] showInterstitial threw:", e);
-                Yes2SDKAdsCallbacks.noFill();
+                Yes2SDKAdsCallbacks._guard(myId, "noFill")();
             }
         } else {
-            Yes2SDKAdsCallbacks.noFill();
+            Yes2SDKAdsCallbacks._guard(myId, "noFill")();
         }
     },
 
     Yes2SDK_ads_showRewarded: function (placementPtr, beforeAd, afterAd, adDismissed, adViewed, noFill) {
+        var myId = ++Yes2SDKAdsCallbacks._activeId;
         Yes2SDKAdsCallbacks._beforeAdPtr = beforeAd;
         Yes2SDKAdsCallbacks._afterAdPtr = afterAd;
         Yes2SDKAdsCallbacks._adDismissedPtr = adDismissed;
@@ -96,19 +110,19 @@ var Yes2SDKAdsLib = {
                 window.Yes2SDK.ads.showRewarded(
                     UTF8ToString(placementPtr),
                     {
-                        beforeAd: Yes2SDKAdsCallbacks.beforeAd,
-                        afterAd: Yes2SDKAdsCallbacks.afterAd,
-                        adDismissed: Yes2SDKAdsCallbacks.adDismissed,
-                        adViewed: Yes2SDKAdsCallbacks.adViewed,
-                        noFill: Yes2SDKAdsCallbacks.noFill
+                        beforeAd: Yes2SDKAdsCallbacks._guard(myId, "beforeAd"),
+                        afterAd: Yes2SDKAdsCallbacks._guard(myId, "afterAd"),
+                        adDismissed: Yes2SDKAdsCallbacks._guard(myId, "adDismissed"),
+                        adViewed: Yes2SDKAdsCallbacks._guard(myId, "adViewed"),
+                        noFill: Yes2SDKAdsCallbacks._guard(myId, "noFill")
                     }
                 );
             } catch (e) {
                 console.error("[Yes2SDK] showRewarded threw:", e);
-                Yes2SDKAdsCallbacks.noFill();
+                Yes2SDKAdsCallbacks._guard(myId, "noFill")();
             }
         } else {
-            Yes2SDKAdsCallbacks.noFill();
+            Yes2SDKAdsCallbacks._guard(myId, "noFill")();
         }
     },
 
