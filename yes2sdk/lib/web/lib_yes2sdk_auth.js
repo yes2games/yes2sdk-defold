@@ -26,13 +26,17 @@ var Yes2SDKAuthLib = {
     },
 
     // Open registration prompts, keyed by a handle id handed to Lua.
-    // Each entry: { prompt: {login, close}, closed: bool, finish: function }.
+    // Each entry: { prompt: {login, close}, closed: bool, dropped: bool, finish: function }.
     $Yes2SDKAuthPrompts: { next: 1, open: {} },
 
     // Synchronous. Returns '{"handle":n}' or '{"error":{code,message,context}}'.
     // requestId carries the Lua on_close callback: it completes exactly once
-    // (success, nil payload) when the prompt closes. On an error result the id is
-    // never completed here; the C++ caller cancels it.
+    // (success, nil payload) when the prompt closes. The bookkeeping (closed flag,
+    // handle freed) is synchronous; the completion itself is delivered on a later
+    // tick, so on_close never runs inside a Lua -> C call (show or close), which
+    // would switch the current script instance under the caller. On an error
+    // result the id is never completed here, even if onClose already fired during
+    // the call (the pending completion is dropped); the C++ caller cancels it.
     Yes2SDK_auth_showRegistrationPrompt__deps: ['$Yes2SDKAuthPrompts', '$UTF8ToString', '$stringToUTF8OnStack'],
     Yes2SDK_auth_showRegistrationPrompt: function (optionsJson, requestId, callback) {
         var context = 'auth.showRegistrationPrompt';
@@ -68,13 +72,16 @@ var Yes2SDKAuthLib = {
             } else {
                 var prompts = Yes2SDKAuthPrompts;
                 var handle = prompts.next++;
-                var entry = { prompt: null, closed: false, finish: null };
-                // Completes the router id once and forgets the handle.
+                var entry = { prompt: null, closed: false, dropped: false, finish: null };
+                // Forgets the handle now and completes the router id once, on a later tick.
                 entry.finish = function () {
                     if (entry.closed) return;
                     entry.closed = true;
                     delete prompts.open[handle];
-                    Yes2SDKBridge.complete(callback, requestId, true, null);
+                    setTimeout(function () {
+                        if (entry.dropped) return;
+                        Yes2SDKBridge.complete(callback, requestId, true, null);
+                    }, 0);
                 };
                 opts.onClose = function () {
                     entry.finish();
@@ -83,17 +90,24 @@ var Yes2SDKAuthLib = {
                 try {
                     prompt = auth.showRegistrationPrompt(opts);
                 } catch (e) {
+                    // The show failed: C++ cancels the id, so a completion that
+                    // onClose may already have scheduled must never run.
                     entry.closed = true;
+                    entry.dropped = true;
                     out = errorResult(e, 'UNKNOWN_ERROR');
                 }
                 if (out === undefined) {
                     if (!prompt || typeof prompt.login !== 'function' || typeof prompt.close !== 'function') {
                         entry.closed = true;
+                        entry.dropped = true;
                         out = errorResult(context + ' returned no prompt handle', 'UNKNOWN_ERROR');
                     } else {
                         entry.prompt = prompt;
                         // onClose may already have fired during the call: the handle is then closed.
                         if (!entry.closed) prompts.open[handle] = entry;
+                        // C++ (Yes2SDKAuth::ShowRegistrationPrompt in yes2sdk_auth.cpp)
+                        // treats a result starting with '{"handle":' as opened and
+                        // cancels the id otherwise. Keep both in sync.
                         out = '{"handle":' + handle + '}';
                     }
                 }
@@ -118,8 +132,10 @@ var Yes2SDKAuthLib = {
         return 1;
     },
 
-    // Closes the prompt and frees the handle. on_close fires once: from the
-    // platform's onClose, or here if the platform did not call it. 1 if the handle was open.
+    // Closes the prompt and frees the handle. on_close fires once, on a later tick,
+    // never inside this call: from the platform's onClose, or here if the platform
+    // did not call it. A platform onClose arriving after this is ignored. 1 if the
+    // handle was open.
     Yes2SDK_auth_registrationPromptClose__deps: ['$Yes2SDKAuthPrompts'],
     Yes2SDK_auth_registrationPromptClose: function (handle) {
         var entry = Yes2SDKAuthPrompts.open[handle];

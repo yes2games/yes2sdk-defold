@@ -1310,13 +1310,17 @@ local _PROMPT_CONTEXT = "auth.showRegistrationPrompt"
 --
 -- options (table or JSON string, all optional):
 --   theme    "light" or "dark"
---   message  text the player's messaging app is pre-filled with. It must contain
---            {{registrationCode}} exactly once, with a space or punctuation
---            around it, and be at most 140 characters.
+--   message  text the player's messaging app is pre-filled with. It must not be
+--            empty or whitespace only, be at most 140 characters (the
+--            placeholder counts as written, an emoji counts as 2), contain
+--            {{registrationCode}} exactly once and no other {{...}}
+--            placeholder, and keep the code apart from neighbouring letters,
+--            digits or underscores with a space or punctuation.
 --   data     table, available from session_get_entry_point_data() after the
 --            player registers
 --   on_close function(self) called once when the prompt closes, by close() or
---            by the platform's own close button
+--            by the platform's own close button. It runs after the call returns,
+--            never inside close() or this call, and never after an error return
 --
 -- Guests only: check auth_is_authenticated() first, a registered player gets an
 -- INVALID_OPERATION error. Save the player's progress before showing it. For a

@@ -340,9 +340,15 @@ end
 
 - Guests only: a registered player gets `INVALID_OPERATION`. Use `auth_is_authenticated()` to tell registered players apart.
 - Save the player's progress before showing the prompt.
-- `message` is optional. It must contain `{{registrationCode}}` exactly once, with a space or punctuation around it, and be at most 140 characters; otherwise you get `INVALID_PARAM`.
+- `message` is optional. When given it must:
+  - not be empty or whitespace only,
+  - be at most 140 characters, counting `{{registrationCode}}` as written and an emoji as 2,
+  - contain `{{registrationCode}}` exactly once and no other `{{...}}` placeholder,
+  - keep the code apart from neighbouring letters, digits or underscores with a space or punctuation.
+
+  Otherwise you get `INVALID_PARAM`. Keep it short and plain: the platform may drop emoji and accented characters from a long pre-filled text.
 - `data` comes back from `session_get_entry_point_data()` after the player registers.
-- `on_close` runs once when the prompt closes, from `prompt.close()` or the platform's own close button. `login()` and `close()` return `false` once the prompt is closed.
+- `on_close` runs once when the prompt closes, from `prompt.close()` or the platform's own close button. It always runs after the call returns, never inside the `prompt.close()` or `auth_show_registration_prompt` call, and never when `auth_show_registration_prompt` returned an error. `login()` and `close()` return `false` once the prompt is closed.
 - For a custom prompt, the platform's own login reminders must be turned off for the game. That is a per-game platform setting, not an SDK call.
 - Platforms without a registration prompt return `FEATURE_NOT_SUPPORTED`.
 

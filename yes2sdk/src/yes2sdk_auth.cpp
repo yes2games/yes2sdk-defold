@@ -25,6 +25,7 @@ int Yes2SDKAuth::ShowRegistrationPrompt(lua_State* L) {
     const char* options = lua_isnoneornil(L, 1) ? 0 : luaL_checkstring(L, 1);
     int id = Yes2SDKRequests::Register(L, 2, "auth_show_registration_prompt");
     const char* result = Yes2SDK_auth_showRegistrationPrompt(options, id, Yes2SDKRequests::Complete);
+    // Must match the success result built in Yes2SDK_auth_showRegistrationPrompt (lib_yes2sdk_auth.js).
     static const char HANDLE_PREFIX[] = "{\"handle\":";
     bool opened = result != 0 && strncmp(result, HANDLE_PREFIX, sizeof(HANDLE_PREFIX) - 1) == 0;
     // Push before cancelling: the result lives on the stack of this frame.
