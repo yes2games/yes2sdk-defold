@@ -1,13 +1,5 @@
 var Yes2SDKBannersLib = {
 
-    $Yes2SDKBannersCallbacks: {
-        _getStatusPtr: null,
-
-        allocateString: function (str) {
-            return stringToUTF8OnStack(str);
-        }
-    },
-
     Yes2SDK_banners_show: function (idPtr, sizePtr) {
         try {
             var banners = window.Yes2SDK && window.Yes2SDK.banners;
@@ -51,27 +43,12 @@ var Yes2SDKBannersLib = {
         return 0;
     },
 
-    Yes2SDK_banners_getStatus: function (callback) {
-        Yes2SDKBannersCallbacks._getStatusPtr = callback;
-        if (window.Yes2SDK && window.Yes2SDK.banners) {
-            try {
-                window.Yes2SDK.banners.getBannerStatusAsync()
-                    .then(function (status) {
-                        {{{ makeDynCall("vii", "Yes2SDKBannersCallbacks._getStatusPtr") }}}(1, Yes2SDKBannersCallbacks.allocateString(JSON.stringify(status || {})));
-                    })
-                    .catch(function (err) {
-                        var msg = typeof err === 'object' ? JSON.stringify(err) : String(err);
-                        {{{ makeDynCall("vii", "Yes2SDKBannersCallbacks._getStatusPtr") }}}(0, Yes2SDKBannersCallbacks.allocateString(msg));
-                    });
-            } catch (e) {
-                // Synchronous throw (e.g. method missing on this platform) never reaches .catch — route it here so the Lua callback still fires.
-                {{{ makeDynCall("vii", "Yes2SDKBannersCallbacks._getStatusPtr") }}}(0, Yes2SDKBannersCallbacks.allocateString(typeof e === 'object' ? JSON.stringify(e) : String(e)));
-            }
-        } else {
-            {{{ makeDynCall("vii", "Yes2SDKBannersCallbacks._getStatusPtr") }}}(0, Yes2SDKBannersCallbacks.allocateString("SDK not initialized"));
-        }
+    Yes2SDK_banners_getStatus: function (requestId, callback) {
+        Yes2SDKBridge.run(callback, requestId, 'banners.getBannerStatusAsync', null, function (status) {
+            return JSON.stringify(status || {});
+        });
     }
 }
 
-autoAddDeps(Yes2SDKBannersLib, '$Yes2SDKBannersCallbacks');
+autoAddDeps(Yes2SDKBannersLib, '$Yes2SDKBridge');
 addToLibrary(Yes2SDKBannersLib);

@@ -1,16 +1,14 @@
 #pragma once
 #include <dmsdk/sdk.h>
+#include "yes2sdk_requests.h"
 #if defined(DM_PLATFORM_HTML5)
 class Yes2SDKFriends {
 public:
-    typedef void (*OnListFriendsCallback)(const int success, const char* result);
     static int ListFriends(lua_State* L);
     static int IsSupported(lua_State* L);
-private:
-    static void OnListFriends(const int success, const char* result);
 };
 extern "C" {
-    void Yes2SDK_friends_listFriends(int page, int size, Yes2SDKFriends::OnListFriendsCallback callback);
+    void Yes2SDK_friends_listFriends(int page, int size, int requestId, Yes2SDKRequests::OnCompleteCallback callback);
     int Yes2SDK_friends_isSupported();
 }
 #endif
