@@ -315,6 +315,37 @@ else
 end
 ```
 
+#### Registration prompt
+
+On platforms that support it, `auth_show_registration_prompt(options)` opens the platform's minimal registration overlay and you draw the rest of the prompt yourself. It returns a handle, or `nil` and an error JSON string (read it with `parse_error`):
+
+```lua
+if not yes2sdk.auth_is_authenticated() then
+    -- save progress first (for example data_set_string_async, then data_flush)
+    local prompt, err = yes2sdk.auth_show_registration_prompt({
+        theme = "dark",
+        message = "Join me in the game! {{registrationCode}} is my code.",
+        data = { reward = "welcome_back" },
+        on_close = function(self) hide_my_prompt_ui() end,
+    })
+    if prompt then
+        -- wire your own buttons:
+        --   prompt.login()  starts the platform login flow (the prompt stays open)
+        --   prompt.close()  closes the prompt (on_close fires once)
+    else
+        print(yes2sdk.parse_error(err).code)
+    end
+end
+```
+
+- Guests only: a registered player gets `INVALID_OPERATION`. Use `auth_is_authenticated()` to tell registered players apart.
+- Save the player's progress before showing the prompt.
+- `message` is optional. It must contain `{{registrationCode}}` exactly once, with a space or punctuation around it, and be at most 140 characters; otherwise you get `INVALID_PARAM`.
+- `data` comes back from `session_get_entry_point_data()` after the player registers.
+- `on_close` runs once when the prompt closes, from `prompt.close()` or the platform's own close button. `login()` and `close()` return `false` once the prompt is closed.
+- For a custom prompt, the platform's own login reminders must be turned off for the game. That is a per-game platform setting, not an SDK call.
+- Platforms without a registration prompt return `FEATURE_NOT_SUPPORTED`.
+
 ### Friends
 
 ```lua
@@ -631,6 +662,7 @@ The native extension is HTML5-only. In the Defold editor, `yes2sdk.*` calls run 
 - `initialize` / `start_game` succeed on the next frame
 - **Ads play a timed mock flow** (3s interstitial, 5s rewarded) and then fire the full callback sequence, so pause-resume wiring in `before_ad` / `after_ad` and the reward path in `ad_viewed` are exercised like a real ad
 - **IAP works end to end**: `iap_is_supported()` returns true, `iap_get_catalog` returns a sample catalog, `iap_purchase` accepts any product id and resolves with a realistic purchase payload, and `iap_get_purchases` / `iap_consume_purchase` operate on a session purchase list
+- `auth_show_registration_prompt` returns a handle: `login()` prints a line, `close()` fires `on_close` on the next frame
 - Other modules keep the one-time-warning stub with sensible defaults
 
 Configure the mock in `game.project` (all keys optional):
