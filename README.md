@@ -488,19 +488,6 @@ end)
 - The catalog: `iap_get_catalog(callback)` returns a JSON array of products (`productId`, `title`, `description`, `imageUri`, `price`, `priceCurrencyCode`, `priceAmount`); `iap_get_product(product_id, callback)` returns one product, or the literal `"null"` when the id is unknown.
 - Failures carry an error code, see [Errors](#errors). In the editor, purchases run against a mock: `mock_purchase_result = fail` in `game.project` tests the failure path (see [Editor Testing](#editor-testing)).
 
-### Context sharing (image)
-
-Share a message with an optional image through the platform's share flow, on platforms that support it.
-
-```lua
-yes2sdk.context_share({
-    intent = "SHARE",              -- "SHARE" (default), "INVITE", "REQUEST" or "CHALLENGE"
-    image = data_url,              -- see below
-    text = "Look at my score!",
-    data = { score = 120 },        -- optional, handed back to whoever opens the share on platforms that support it
-}, function(self, success, err)
-    if not success then
-        print("Share failed: " .. yes2sdk.parse_error(err).code)
 #### Subscriptions
 
 On platforms that support it, players can subscribe to a product. Gate subscription UI on `iap_is_subscription_supported()`.
@@ -536,10 +523,6 @@ yes2sdk.iap_subscribe(PREMIUM, function(self, success, result_json)
 end)
 ```
 
-- `image` is a URL on most platforms. Some platforms require a base64 PNG or a `data:image/png;base64,...` URL, so prefer the data URL. Fields a platform does not use (`image`, `text` or `data`) are ignored.
-- Do not gate `context_share` on `context_is_supported()`: it can return false on platforms where sharing works. Call `context_share` and handle the failure; a `FEATURE_NOT_SUPPORTED` code means the platform has no share.
-- The callback is optional: `yes2sdk.context_share(options)` is a fire-and-forget share.
-- Passing options that are not a table or a JSON string fails the callback with `INVALID_PARAM`.
 - **Never re-offer a subscription the player already holds.** Check `isActive` from `iap_get_subscriptions`, or `iap_get_subscription_status(product_id, callback)`, before showing a subscribe button.
 - `iap_subscribe(product_id, callback)` returns `{"status":"subscribed","subscription":{...}}`, or `{"status":"cancelled"}` when the player closed the checkout. A closed checkout can also arrive as a failure with code `IAP_PURCHASE_CANCELLED` (read it with `parse_error`): treat it as a change of mind, not an error. One subscribe at a time: a second call while one is open fails on the next frame with `INVALID_OPERATION`.
 - Subscription JSON fields: `productId`, `title`, `description`, `price`, `priceAmount`, `priceCurrencyCode`, `billingPeriod` (`weekly`, `monthly` or `yearly`), `isActive` (grant the entitlement when true), `trialEligible`, `introOffer` and `retentionOffer` (`{priceAmount, durationPeriods}` or `null`), and where the platform provides them `isSandbox` and `signedRequest`. Verify `signedRequest` on your own server, as for purchases.
@@ -547,6 +530,28 @@ end)
 - `iap_cancel_subscription(product_id, callback)` calls back with `(self, success, cancelled)`: `cancelled` is a boolean on success, the error JSON on failure.
 - `iap_claim_retention_offer(product_id, callback)` claims the subscription's retention offer and returns the updated subscription JSON.
 - In the editor, the mock offers `yes2.mock.premium.monthly` and keeps subscription state for the session; `mock_subscribe_result` selects the checkout outcome (see [Editor Testing](#editor-testing)).
+
+### Context sharing (image)
+
+Share a message with an optional image through the platform's share flow, on platforms that support it.
+
+```lua
+yes2sdk.context_share({
+    intent = "SHARE",              -- "SHARE" (default), "INVITE", "REQUEST" or "CHALLENGE"
+    image = data_url,              -- see below
+    text = "Look at my score!",
+    data = { score = 120 },        -- optional, handed back to whoever opens the share on platforms that support it
+}, function(self, success, err)
+    if not success then
+        print("Share failed: " .. yes2sdk.parse_error(err).code)
+    end
+end)
+```
+
+- `image` is a URL on most platforms. Some platforms require a base64 PNG or a `data:image/png;base64,...` URL, so prefer the data URL. Fields a platform does not use (`image`, `text` or `data`) are ignored.
+- Do not gate `context_share` on `context_is_supported()`: it can return false on platforms where sharing works. Call `context_share` and handle the failure; a `FEATURE_NOT_SUPPORTED` code means the platform has no share.
+- The callback is optional: `yes2sdk.context_share(options)` is a fire-and-forget share.
+- Passing options that are not a table or a JSON string fails the callback with `INVALID_PARAM`.
 
 ### Leaderboard
 
