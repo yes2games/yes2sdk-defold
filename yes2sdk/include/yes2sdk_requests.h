@@ -23,6 +23,8 @@ namespace Yes2SDKRequests {
 
     // Called from JS. Unknown id (duplicate or stale completion) -> dmLogWarning, nothing else.
     // Otherwise erases the entry BEFORE invoking, so a call started inside the callback works,
+    // drops the response with a dmLogWarning naming the request when the calling script
+    // instance no longer exists, otherwise
     // calls the callback with (self, success boolean, payload string or nil) under lua_pcall,
     // logs a raised error with the request's name, then unrefs the callback and instance.
     void Complete(const int requestId, const int success, const char* payload);

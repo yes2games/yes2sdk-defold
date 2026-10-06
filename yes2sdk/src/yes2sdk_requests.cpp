@@ -56,7 +56,15 @@ void Complete(const int requestId, const int success, const char* payload) {
 
     lua_State* L = request.m_Listener.m_L;
     int top = lua_gettop(L);
-    lua_pushlistener(L, request.m_Listener);
+    lua_pushlistener(L, request.m_Listener); // callback, self; self is now the current instance
+    if (!dmScript::IsInstanceValid(L)) {
+        // The script that made the call was deleted before the response arrived.
+        lua_pop(L, 2);
+        assert(top == lua_gettop(L));
+        dmLogWarning("[Yes2SDK] %s: dropping the response, the calling script instance no longer exists", request.m_Name);
+        lua_unreflistener(L, request.m_Listener);
+        return;
+    }
     lua_pushboolean(L, success);
     if (payload) { lua_pushstring(L, payload); } else { lua_pushnil(L); }
     int ret = lua_pcall(L, 3, 0, 0);
