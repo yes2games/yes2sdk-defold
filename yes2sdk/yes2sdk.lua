@@ -1162,6 +1162,85 @@ function M.auth_is_supported()
   return sdk.auth_is_supported()
 end
 
+-- ── Registration prompt ──
+
+local _PROMPT_CONTEXT = "auth.showRegistrationPrompt"
+
+--- Ask a guest to register, with your own prompt UI.
+-- On platforms that support it, this opens the platform's minimal registration
+-- overlay and returns a handle whose functions you wire to your own buttons:
+-- handle.login() starts the platform login flow (the handle stays open) and
+-- handle.close() closes the prompt (the handle is freed). Both return true when
+-- the handle was still open, false otherwise.
+--
+-- options (table or JSON string, all optional):
+--   theme    "light" or "dark"
+--   message  text the player's messaging app is pre-filled with. It must not be
+--            empty or whitespace only, be at most 140 characters (the
+--            placeholder counts as written, an emoji counts as 2), contain
+--            {{registrationCode}} exactly once and no other {{...}}
+--            placeholder, and keep the code apart from neighbouring letters,
+--            digits or underscores with a space or punctuation.
+--   data     table, available from session_get_entry_point_data() after the
+--            player registers
+--   on_close function(self) called once when the prompt closes, by close() or
+--            by the platform's own close button. It runs after the call returns,
+--            never inside close() or this call, and never after an error return
+--
+-- Guests only: check auth_is_authenticated() first, a registered player gets an
+-- INVALID_OPERATION error. Save the player's progress before showing it. For a
+-- custom prompt the platform's own login reminders must be turned off for the
+-- game; that is a per-game platform setting, not an SDK call.
+--
+-- Returns handle, or nil and an error JSON string (see M.parse_error): codes
+-- FEATURE_NOT_SUPPORTED, INVALID_OPERATION, INVALID_PARAM (bad options or
+-- message), NOT_INITIALIZED. Synchronous: nothing is called back on failure.
+function M.auth_show_registration_prompt(options)
+  local on_close
+  local rest = options
+  if type(options) == "table" then
+    on_close = options.on_close
+    if on_close ~= nil and type(on_close) ~= "function" then
+      return nil, invalid_param("on_close must be a function, got " .. type(on_close), _PROMPT_CONTEXT)
+    end
+    rest = {}
+    for k, v in pairs(options) do
+      if k ~= "on_close" then rest[k] = v end
+    end
+  end
+  local encoded, err = encode_options(rest, _PROMPT_CONTEXT)
+  if err then return nil, err end
+
+  local raw = sdk.auth_show_registration_prompt(encoded, function(self)
+    if on_close then on_close(self) end
+  end)
+  local decoded
+  if type(raw) == "string" then
+    local ok, value = pcall(json.decode, raw)
+    if ok and type(value) == "table" then decoded = value end
+  end
+  if decoded and type(decoded.handle) == "number" then
+    local id = decoded.handle
+    return {
+      login = function() return sdk.auth_registration_prompt_login(id) == true end,
+      close = function() return sdk.auth_registration_prompt_close(id) == true end,
+    }
+  end
+  local e = decoded and decoded.error
+  if type(e) == "table" then
+    return nil, json.encode({
+      code = _error_field(e, "code") or "UNKNOWN_ERROR",
+      message = _error_field(e, "message") or "",
+      context = _error_field(e, "context") or _PROMPT_CONTEXT,
+    })
+  end
+  return nil, json.encode({
+    code = "UNKNOWN_ERROR",
+    message = "unexpected result: " .. tostring(raw),
+    context = _PROMPT_CONTEXT,
+  })
+end
+
 -- ── Data (key-value storage) ──
 
 function M.data_get_int(key, default)
@@ -1303,85 +1382,6 @@ end
 -- string of the player's resulting LeaderboardEntry.
 function M.leaderboard_set_score(name, score, metadata, callback)
   sdk.leaderboard_set_score(name, score, metadata, callback)
-end
-
--- ── Registration prompt ──
-
-local _PROMPT_CONTEXT = "auth.showRegistrationPrompt"
-
---- Ask a guest to register, with your own prompt UI.
--- On platforms that support it, this opens the platform's minimal registration
--- overlay and returns a handle whose functions you wire to your own buttons:
--- handle.login() starts the platform login flow (the handle stays open) and
--- handle.close() closes the prompt (the handle is freed). Both return true when
--- the handle was still open, false otherwise.
---
--- options (table or JSON string, all optional):
---   theme    "light" or "dark"
---   message  text the player's messaging app is pre-filled with. It must not be
---            empty or whitespace only, be at most 140 characters (the
---            placeholder counts as written, an emoji counts as 2), contain
---            {{registrationCode}} exactly once and no other {{...}}
---            placeholder, and keep the code apart from neighbouring letters,
---            digits or underscores with a space or punctuation.
---   data     table, available from session_get_entry_point_data() after the
---            player registers
---   on_close function(self) called once when the prompt closes, by close() or
---            by the platform's own close button. It runs after the call returns,
---            never inside close() or this call, and never after an error return
---
--- Guests only: check auth_is_authenticated() first, a registered player gets an
--- INVALID_OPERATION error. Save the player's progress before showing it. For a
--- custom prompt the platform's own login reminders must be turned off for the
--- game; that is a per-game platform setting, not an SDK call.
---
--- Returns handle, or nil and an error JSON string (see M.parse_error): codes
--- FEATURE_NOT_SUPPORTED, INVALID_OPERATION, INVALID_PARAM (bad options or
--- message), NOT_INITIALIZED. Synchronous: nothing is called back on failure.
-function M.auth_show_registration_prompt(options)
-  local on_close
-  local rest = options
-  if type(options) == "table" then
-    on_close = options.on_close
-    if on_close ~= nil and type(on_close) ~= "function" then
-      return nil, invalid_param("on_close must be a function, got " .. type(on_close), _PROMPT_CONTEXT)
-    end
-    rest = {}
-    for k, v in pairs(options) do
-      if k ~= "on_close" then rest[k] = v end
-    end
-  end
-  local encoded, err = encode_options(rest, _PROMPT_CONTEXT)
-  if err then return nil, err end
-
-  local raw = sdk.auth_show_registration_prompt(encoded, function(self)
-    if on_close then on_close(self) end
-  end)
-  local decoded
-  if type(raw) == "string" then
-    local ok, value = pcall(json.decode, raw)
-    if ok and type(value) == "table" then decoded = value end
-  end
-  if decoded and type(decoded.handle) == "number" then
-    local id = decoded.handle
-    return {
-      login = function() return sdk.auth_registration_prompt_login(id) == true end,
-      close = function() return sdk.auth_registration_prompt_close(id) == true end,
-    }
-  end
-  local e = decoded and decoded.error
-  if type(e) == "table" then
-    return nil, json.encode({
-      code = _error_field(e, "code") or "UNKNOWN_ERROR",
-      message = _error_field(e, "message") or "",
-      context = _error_field(e, "context") or _PROMPT_CONTEXT,
-    })
-  end
-  return nil, json.encode({
-    code = "UNKNOWN_ERROR",
-    message = "unexpected result: " .. tostring(raw),
-    context = _PROMPT_CONTEXT,
-  })
 end
 
 --- Get leaderboard entries with pagination.
