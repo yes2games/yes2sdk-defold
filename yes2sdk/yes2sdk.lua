@@ -51,7 +51,7 @@ if not sdk then
   -- ── Editor mock (desktop builds only) ──
   --
   -- Without a mock, ad callbacks never fire in the editor (only the
-  -- watchdog's no_fill after 30 s) and IAP callbacks never fire at all, so integrations
+  -- watchdog's no_fill, then after_ad, after 30 s) and IAP callbacks never fire at all, so integrations
   -- could only be tested in an HTML5 bundle. The mock simulates the full
   -- callback flows on timers, mirroring the Unity SDK's Play Mode mocks:
   -- 3s interstitial / 5s rewarded, sample IAP catalog, session purchases,
@@ -1096,6 +1096,15 @@ end
 
 -- ── IAP (in-app purchases) ──
 
+-- Lua 5.1 names a C function "?" in its argument errors when it was called
+-- through pcall. Put the public function name back so the message stays useful.
+local function _name_native_error(err, name)
+  if type(err) == "string" then
+    return (err:gsub("to '%?'", "to '" .. name .. "'", 1))
+  end
+  return err
+end
+
 -- True between an iap_purchase / iap_consume_purchase call and its callback.
 -- One checkout at a time: a second purchase while one is open could put two
 -- payment prompts in front of the player, so re-entry is rejected (logged, no
@@ -1143,7 +1152,7 @@ function M.iap_purchase(product_id, developer_payload, callback)
     -- The native raised (a wrong argument type) before it kept the callback, so
     -- nothing will clear the flag: clear it here and re-raise the error.
     _iap_purchase_in_flight = false
-    error(err, 0)
+    error(_name_native_error(err, "iap_purchase"), 0)
   end
 end
 
@@ -1171,7 +1180,7 @@ function M.iap_consume_purchase(purchase_token, callback)
   if not ok then
     -- Same as iap_purchase: release the guard, then re-raise the native error.
     _iap_consume_in_flight = false
-    error(call_err, 0)
+    error(_name_native_error(call_err, "iap_consume_purchase"), 0)
   end
 end
 

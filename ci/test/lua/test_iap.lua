@@ -117,4 +117,26 @@ function T.consume_guard_is_released_when_the_native_call_raises()
   h.falsy(h.printed("iap_consume_purchase rejected"), "the next consume must not be rejected")
 end
 
+-- Lua 5.1 reports a C function's argument error as "bad argument #1 to '?'"
+-- when it was reached through pcall, so the wrapper names the public function.
+function T.purchase_argument_error_names_the_public_function()
+  local fake = h.fake_native{ overrides = { iap_purchase = function()
+    error("bad argument #1 to '?' (string expected, got nil)")
+  end } }
+  local sdk = h.load_wrapper{ native = fake }
+  local ok, err = pcall(sdk.iap_purchase, nil, nil, function() end)
+  h.falsy(ok)
+  h.match(tostring(err), "bad argument #1 to 'iap_purchase'")
+end
+
+function T.consume_argument_error_names_the_public_function()
+  local fake = h.fake_native{ overrides = { iap_consume_purchase = function()
+    error("bad argument #1 to '?' (string expected, got nil)")
+  end } }
+  local sdk = h.load_wrapper{ native = fake }
+  local ok, err = pcall(sdk.iap_consume_purchase, nil, function() end)
+  h.falsy(ok)
+  h.match(tostring(err), "bad argument #1 to 'iap_consume_purchase'")
+end
+
 return T
