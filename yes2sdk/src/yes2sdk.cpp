@@ -15,6 +15,7 @@
 #include "yes2sdk_review.h"
 #include "yes2sdk_iap.h"
 #include "yes2sdk_referrals.h"
+#include "yes2sdk_notifications.h"
 #include "yes2sdk_requests.h"
 #include "luautils.h"
 #include <dmsdk/sdk.h>
@@ -377,6 +378,11 @@ static const luaL_reg Module_methods[] = {
     {"referrals_share", Yes2SDKReferrals::Share},
     {"referrals_list", Yes2SDKReferrals::List},
     {"referrals_is_supported", Yes2SDKReferrals::IsSupported},
+    // Notifications
+    {"notifications_schedule", Yes2SDKNotifications::Schedule},
+    {"notifications_cancel", Yes2SDKNotifications::Cancel},
+    {"notifications_cancel_all", Yes2SDKNotifications::CancelAll},
+    {"notifications_is_supported", Yes2SDKNotifications::IsSupported},
 
     {0, 0}
 };

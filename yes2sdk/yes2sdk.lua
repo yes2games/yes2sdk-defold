@@ -41,6 +41,18 @@ if not sdk then
   function sdk.config_is_supported() warn() return false end
   function sdk.review_is_supported() warn() return false end
   function sdk.iap_is_supported() warn() return false end
+  -- Notifications: unsupported, and the async calls fail instead of going silent.
+  local function stub_fail(callback)
+    warn()
+    if not callback then return end
+    local err = '{"code":"NOT_INITIALIZED","message":"Yes2SDK extension not loaded","context":"notifications"}'
+    local ok, handle = pcall(timer.delay, 0, false, function(tself) callback(tself, false, err) end)
+    if not ok or handle == timer.INVALID_TIMER_HANDLE then callback(nil, false, err) end
+  end
+  function sdk.notifications_is_supported() warn() return false end
+  function sdk.notifications_schedule(options, callback) stub_fail(callback) end
+  function sdk.notifications_cancel(id, callback) stub_fail(callback) end
+  function sdk.notifications_cancel_all(callback) stub_fail(callback) end
   function sdk.ads_is_rewarded_ad_available() warn() return false end
   function sdk.ads_is_interstitial_supported() warn() return false end
   function sdk.ads_is_rewarded_supported() warn() return false end
@@ -271,6 +283,37 @@ if not sdk then
       if callback then
         next_frame(function(tself) callback(tself, true, '{"referrals":{},"signedRequest":"mock"}') end)
       end
+    end
+
+    -- Notifications: schedule echoes the notification with a computed time.
+    local mock_notification_count = 0
+    function sdk.notifications_is_supported() return true end
+    function sdk.notifications_schedule(options_json, callback)
+      local ok, options = pcall(json.decode, options_json or "{}")
+      if not ok or type(options) ~= "table" then options = {} end
+      mock_notification_count = mock_notification_count + 1
+      local delay_ms = 0
+      if options.delaySeconds then
+        delay_ms = options.delaySeconds * 1000
+      elseif options.scheduledInDays then
+        delay_ms = options.scheduledInDays * 86400 * 1000
+      end
+      local result = json.encode({
+        id = options.id or ("mock-notification-" .. mock_notification_count),
+        title = options.title or "",
+        body = options.body or "",
+        scheduledAt = os.time() * 1000 + delay_ms,
+      })
+      print("[Yes2SDK] Mock: notifications_schedule succeeded")
+      if callback then next_frame(function(tself) callback(tself, true, result) end) end
+    end
+    function sdk.notifications_cancel(id, callback)
+      print("[Yes2SDK] Mock: notifications_cancel succeeded")
+      if callback then next_frame(function(tself) callback(tself, true, nil) end) end
+    end
+    function sdk.notifications_cancel_all(callback)
+      print("[Yes2SDK] Mock: notifications_cancel_all succeeded")
+      if callback then next_frame(function(tself) callback(tself, true, nil) end) end
     end
   end
 end
@@ -1294,6 +1337,68 @@ end
 --- Check whether in-app purchases are supported on the current platform.
 function M.iap_is_supported()
   return sdk.iap_is_supported()
+end
+
+-- ── Notifications ──
+
+-- Public snake_case option names to the camelCase names the SDK takes. Keys not
+-- listed here (id, title, body, priority, data, anything newer) pass through
+-- unchanged.
+local _NOTIFICATION_KEYS = {
+  delay_seconds = "delaySeconds",
+  scheduled_in_days = "scheduledInDays",
+  cta_text = "ctaText",
+  image_asset_id = "imageAssetId",
+  image_data_url = "imageDataUrl",
+  icon_url = "iconUrl",
+}
+
+--- Schedule a notification for later.
+-- @param options Table (or a JSON string, passed through as is with the SDK's
+--   own camelCase names): { id, title (required), body, delay_seconds or
+--   scheduled_in_days (integer 0 to 7, not both), cta_text, priority
+--   ("low"|"medium"|"high"|"critical"), image_asset_id or image_data_url,
+--   icon_url, data }. The SDK validates the values and reports INVALID_PARAM.
+-- Scheduling again with the same id replaces the earlier notification.
+-- Callback signature: function(self, success, result_json) where result_json is
+-- '{"id":"...","title":"...","body":"...","scheduledAt":<ms since epoch>}'.
+function M.notifications_schedule(options, callback)
+  if type(options) == "table" then
+    local mapped = {}
+    for key, value in pairs(options) do
+      mapped[_NOTIFICATION_KEYS[key] or key] = value
+    end
+    options = mapped
+  end
+  local encoded, err = encode_options(options, "notifications.scheduleAsync")
+  if err then
+    fail_async(callback, err)
+    return
+  end
+  -- A missing or empty options value still goes to the SDK so it can report
+  -- the missing title in one place.
+  sdk.notifications_schedule(encoded or "{}", callback)
+end
+
+--- Cancel one scheduled notification by id.
+-- Callback signature: function(self, success, err_json_or_nil).
+function M.notifications_cancel(id, callback)
+  if type(id) ~= "string" or id == "" then
+    fail_async(callback, invalid_param("id must be a non-empty string", "notifications.cancelAsync"))
+    return
+  end
+  sdk.notifications_cancel(id, callback)
+end
+
+--- Cancel every scheduled notification.
+-- Callback signature: function(self, success, err_json_or_nil).
+function M.notifications_cancel_all(callback)
+  sdk.notifications_cancel_all(callback)
+end
+
+--- Check whether scheduled notifications are supported on the current platform.
+function M.notifications_is_supported()
+  return sdk.notifications_is_supported()
 end
 
 -- ── Entry point data ──

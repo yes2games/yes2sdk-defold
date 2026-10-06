@@ -308,7 +308,7 @@ yes2sdk.analytics_log_event("boss_defeated", json.encode({ level = 3, time = 42.
 
 These modules add extra player-facing features. They are **not guaranteed** to be available at runtime — guard with a support check and handle the unsupported case gracefully. Don't make your core gameplay depend on them.
 
-Support checks available: `ads_is_interstitial_supported()`, `ads_is_rewarded_supported()`, `auth_is_supported()`, `player_is_data_supported()`, `friends_is_supported()`, `banners_is_supported()`, `score_is_supported()`, `leaderboard_is_supported()`, `stats_is_supported()`, `config_is_supported()`, `review_is_supported()`, `iap_is_supported()`, `referrals_is_supported()`.
+Support checks available: `ads_is_interstitial_supported()`, `ads_is_rewarded_supported()`, `auth_is_supported()`, `player_is_data_supported()`, `friends_is_supported()`, `banners_is_supported()`, `score_is_supported()`, `leaderboard_is_supported()`, `stats_is_supported()`, `config_is_supported()`, `review_is_supported()`, `iap_is_supported()`, `referrals_is_supported()`, `notifications_is_supported()`.
 
 ```lua
 if yes2sdk.ads_is_rewarded_supported() then
@@ -518,6 +518,40 @@ if yes2sdk.review_is_supported() then
     end)
 end
 ```
+
+### Notifications
+
+Schedule a reminder that is shown to the player later, on platforms that support it. Gate it on `notifications_is_supported()`. On some platforms the player must be registered before notifications are delivered.
+
+```lua
+if yes2sdk.notifications_is_supported() then
+    -- One notification per day for the next week. The id is per day, so
+    -- scheduling the sequence again replaces it instead of piling up copies.
+    for day = 1, 7 do
+        yes2sdk.notifications_schedule({
+            id = "daily_" .. day,
+            title = "Your reward is ready",
+            body = "Come back for the day " .. day .. " bonus.",
+            scheduled_in_days = day,
+            image_asset_id = "reward_day_" .. day,
+            cta_text = "Play",
+            priority = "medium",
+            data = { day = day },
+        }, function(self, success, result_json)
+            if not success then
+                print(yes2sdk.parse_error(result_json).message)
+            end
+        end)
+    end
+end
+
+yes2sdk.notifications_cancel("daily_3", function(self, success, error) end)
+yes2sdk.notifications_cancel_all(function(self, success, error) end)
+```
+
+- **Options:** `id`, `title` (required), `body`, `scheduled_in_days` (a whole number from 0 to 7) or `delay_seconds` (use one of them, not both), `cta_text`, `priority` (`low`, `medium`, `high` or `critical`), `image_asset_id` or `image_data_url` (use one of them), `icon_url`, `data`. A JSON string is accepted too and is passed through as is, so use the camelCase names in that case.
+- **Same id replaces.** Scheduling with an id that is already scheduled replaces the earlier notification. Without an id one is generated and returned.
+- **Result:** the callback gets `{"id","title","body","scheduledAt"}` with `scheduledAt` in milliseconds since the epoch. Invalid options fail with `INVALID_PARAM`.
 
 ---
 
