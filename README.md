@@ -648,8 +648,8 @@ if yes2sdk.notifications_is_supported() then
     end
 end
 
-yes2sdk.notifications_cancel("daily_3", function(self, success, error) end)
-yes2sdk.notifications_cancel_all(function(self, success, error) end)
+yes2sdk.notifications_cancel("daily_3", function(self, success, err) end)
+yes2sdk.notifications_cancel_all(function(self, success, err) end)
 ```
 
 - **Options:** `id`, `title` (required), `body`, `scheduled_in_days` (a whole number from 0 to 7) or `delay_seconds` (use one of them, not both), `cta_text`, `priority` (`low`, `medium`, `high` or `critical`), `image_asset_id` or `image_data_url` (use one of them), `icon_url`, `data`. A JSON string is accepted too and is passed through as is, so use the camelCase names in that case.
@@ -833,7 +833,7 @@ mock_referral_result = canceled
 - `mock_ad_result = nofill` makes ad calls fail with `no_fill`. Default: `normal`.
 - `mock_entry_point_data` is a JSON object string returned by `session_get_entry_point_data()`. Default: `{}`.
 - `mock_purchase_result = fail` makes `iap_purchase` fail with an `IAP_PURCHASE_FAILED` error (see [Errors](#errors)). Default: `success`.
-- `mock_referral_result = canceled` makes `referrals_share` report `{"canceled":true}`. Default: `{"canceled":false}`.
+- `mock_referral_result = canceled` makes `referrals_share` report `{"canceled":true}`. Default: `shared` (reports `{"canceled":false}`).
 - `mock_subscribe_result = cancelled` makes `iap_subscribe` report `{"status":"cancelled"}`; `fail` makes it fail with an `IAP_PURCHASE_FAILED` error. Default: `subscribed`.
 
 The mock is editor/desktop only. HTML5 bundles always use the real platform SDK, and a missing extension in an HTML5 build still prints the loud bundling warning. For richer simulation (specific locales, network conditions), use the QA Inspector in the Yes2Games Dashboard.
