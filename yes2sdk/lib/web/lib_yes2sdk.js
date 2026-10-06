@@ -1,5 +1,82 @@
 var Yes2SDKLib = {
 
+    // Shared request bridge. Every async binding that takes (..., requestId, callback)
+    // completes through it, so each response reaches the call that made it. Other
+    // library files pull it in with __deps: ['$Yes2SDKBridge'].
+    $Yes2SDKBridge: {
+        // Calls the C++ OnCompleteCallback(int requestId, int success, const char* payload).
+        // A null or undefined payload is passed as a null pointer (nil in Lua).
+        complete: function (cb, id, success, payload) {
+            var ptr = (payload === null || payload === undefined) ? 0 : stringToUTF8OnStack(String(payload));
+            {{{ makeDynCall("viii", "cb") }}}(id, success ? 1 : 0, ptr);
+        },
+
+        // Failure payload handed to Lua. Never throws. The one place to change the
+        // error format: objects are JSON encoded, anything else goes through String().
+        errorString: function (err, context) {
+            if (err !== null && typeof err === 'object') {
+                try {
+                    var json = JSON.stringify(err);
+                    if (typeof json === 'string') return json;
+                } catch (e) {}
+            }
+            try {
+                return String(err);
+            } catch (e2) {}
+            return 'Unknown error in ' + context;
+        },
+
+        // Calls window.Yes2SDK[module][method] for context "module.method" with the
+        // module as `this`, and completes request `id` exactly once:
+        // - SDK or module missing: failure "SDK not initialized".
+        // - method missing, getArgs throws, sync throw or rejection: failure errorString(err).
+        // - resolution: success with mapResult(value); the default is
+        //   JSON.stringify(value === undefined ? null : value). A mapResult returning
+        //   null or undefined completes with a nil payload; a throwing one is a failure.
+        // getArgs (optional) returns the argument array; it runs inside the try.
+        run: function (cb, id, context, getArgs, mapResult) {
+            var done = false;
+            var finish = function (success, payload) {
+                if (done) return;
+                done = true;
+                Yes2SDKBridge.complete(cb, id, success, payload);
+            };
+            var fail = function (err) {
+                finish(false, Yes2SDKBridge.errorString(err, context));
+            };
+            var dot = context.indexOf('.');
+            var moduleName = context.substring(0, dot);
+            var methodName = context.substring(dot + 1);
+            var sdk = window.Yes2SDK;
+            var mod = sdk ? sdk[moduleName] : undefined;
+            if (!mod) {
+                finish(false, 'SDK not initialized');
+                return;
+            }
+            var result;
+            try {
+                if (typeof mod[methodName] !== 'function') {
+                    throw context + ' is not a function';
+                }
+                var args = getArgs ? getArgs() : [];
+                result = mod[methodName].apply(mod, args);
+            } catch (e) {
+                fail(e);
+                return;
+            }
+            Promise.resolve(result).then(function (value) {
+                var payload;
+                try {
+                    payload = mapResult ? mapResult(value) : JSON.stringify(value === undefined ? null : value);
+                } catch (e) {
+                    fail(e);
+                    return;
+                }
+                finish(true, payload);
+            }, fail);
+        }
+    },
+
     $Yes2SDKUtils: {
         allocateString: function (str) {
             return stringToUTF8OnStack(str);

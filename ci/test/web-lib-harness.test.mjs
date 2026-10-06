@@ -25,6 +25,8 @@ function fixture(source) {
 const SESSION = "yes2sdk/lib/web/lib_yes2sdk_session.js";
 const IAP = "yes2sdk/lib/web/lib_yes2sdk_iap.js";
 const CORE = "yes2sdk/lib/web/lib_yes2sdk.js";
+// The IAP library completes through $Yes2SDKBridge, defined in lib_yes2sdk.js.
+const IAP_LIBS = [CORE, IAP];
 
 test("session: every Yes2SDK_session_* function is exported", () => {
     const { exports } = loadWebLib(SESSION, { yes2sdk: {} });
@@ -71,46 +73,50 @@ test("session: isAudioEnabled defaults to 1 with no SDK on the page", () => {
 
 test("iap: a resolved getCatalogAsync produces exactly one success dyncall with the payload", async () => {
     const catalog = [{ productId: "coins", price: "$1" }];
-    const web = loadWebLib(IAP, { yes2sdk: { iap: { getCatalogAsync: () => Promise.resolve(catalog) } } });
-    web.exports.Yes2SDK_iap_getCatalog(42);
+    const web = loadWebLib(IAP_LIBS, { yes2sdk: { iap: { getCatalogAsync: () => Promise.resolve(catalog) } } });
+    web.exports.Yes2SDK_iap_getCatalog(1, 42);
     assert.equal(web.dyncalls.length, 0, "the callback must not fire before the promise settles");
     await web.flush();
     assert.equal(web.dyncalls.length, 1);
-    assert.deepEqual(web.dyncalls[0], { sig: "vii", ptr: 42, args: [1, JSON.stringify(catalog)] });
+    assert.deepEqual(web.dyncalls[0], { sig: "viii", ptr: 42, args: [1, 1, JSON.stringify(catalog)] });
     assert.deepEqual(web.problems, []);
 });
 
-test("iap: the $Yes2SDKIapCallbacks helper is exported and injected through __deps", () => {
-    const { exports } = loadWebLib(IAP, { yes2sdk: {} });
-    assert.equal(typeof exports.$Yes2SDKIapCallbacks, "object");
-    assert.ok(exports.Yes2SDK_iap_getCatalog__deps.includes("$Yes2SDKIapCallbacks"));
+test("iap: the cross-file $Yes2SDKBridge helper is exported and injected through __deps", () => {
+    const { exports, problems } = loadWebLib(IAP_LIBS, { yes2sdk: {} });
+    assert.equal(typeof exports.$Yes2SDKBridge, "object");
+    assert.ok(exports.Yes2SDK_iap_getCatalog__deps.includes("$Yes2SDKBridge"));
+    assert.deepEqual(problems, []);
+    // Loaded without the file that defines it, the dependency is reported.
+    const alone = loadWebLib(IAP, { yes2sdk: {} });
+    assert.match(alone.problems.join("\n"), /__deps "\$Yes2SDKBridge", which no loaded library defines/);
 });
 
 test("negative: a fake missing the method yields the failure dyncall, not a success", async () => {
     // getCatalogAsync is absent: the library's sync throw path must report failure.
-    const web = loadWebLib(IAP, { yes2sdk: { iap: {} } });
-    web.exports.Yes2SDK_iap_getCatalog(7);
+    const web = loadWebLib(IAP_LIBS, { yes2sdk: { iap: {} } });
+    web.exports.Yes2SDK_iap_getCatalog(1, 7);
     await web.flush();
     assert.equal(web.dyncalls.length, 1);
-    assert.equal(web.dyncalls[0].args[0], 0, "a broken fake must not look like success");
+    assert.equal(web.dyncalls[0].args[1], 0, "a broken fake must not look like success");
     // And an assertion written for the happy path really does fail on it.
-    assert.throws(() => assert.equal(web.dyncalls[0].args[0], 1));
+    assert.throws(() => assert.equal(web.dyncalls[0].args[1], 1));
 });
 
 test("negative: a rejected promise yields one failure dyncall carrying the error", async () => {
-    const web = loadWebLib(IAP, {
+    const web = loadWebLib(IAP_LIBS, {
         yes2sdk: { iap: { getCatalogAsync: () => Promise.reject(new Error("boom")) } },
     });
-    web.exports.Yes2SDK_iap_getCatalog(9);
+    web.exports.Yes2SDK_iap_getCatalog(1, 9);
     await web.flush();
     assert.equal(web.dyncalls.length, 1);
-    assert.equal(web.dyncalls[0].args[0], 0);
+    assert.equal(web.dyncalls[0].args[1], 0);
 });
 
 test("harness: a dyncall through a null pointer or with the wrong arity is reported as a problem", () => {
-    const web = loadWebLib(IAP, { yes2sdk: {} });
+    const web = loadWebLib(IAP_LIBS, { yes2sdk: {} });
     // No SDK module -> immediate failure dyncall through the pointer given (null here).
-    web.exports.Yes2SDK_iap_getCatalog(0);
+    web.exports.Yes2SDK_iap_getCatalog(1, 0);
     assert.equal(web.dyncalls.length, 1);
     assert.match(web.problems.join("\n"), /null function pointer/);
     // Wrong arity: sig "vii" takes 2 args, the library calls it with 1.
@@ -161,7 +167,7 @@ test("harness: lifecycle events trampoline through the stored pointer", () => {
 
 test("harness: UTF8ToString maps pointer 0 to the empty string like Emscripten", async () => {
     let seen;
-    const web = loadWebLib(IAP, {
+    const web = loadWebLib(IAP_LIBS, {
         yes2sdk: {
             iap: {
                 purchaseAsync: (options) => {
@@ -171,10 +177,10 @@ test("harness: UTF8ToString maps pointer 0 to the empty string like Emscripten",
             },
         },
     });
-    web.exports.Yes2SDK_iap_purchase("coins", 0, 3);
+    web.exports.Yes2SDK_iap_purchase("coins", 0, 1, 3);
     await web.flush();
     assert.deepEqual(seen, { productId: "coins", developerPayload: undefined });
-    assert.equal(web.dyncalls[0].args[0], 1);
+    assert.equal(web.dyncalls[0].args[1], 1);
 });
 
 test("harness: every tracked library loads into one shared scope with no problems", () => {
