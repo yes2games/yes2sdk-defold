@@ -1,101 +1,44 @@
 var Yes2SDKLeaderboardLib = {
 
-    $Yes2SDKLeaderboardCallbacks: {
-        _getPtr: null,
-        _setScorePtr: null,
-        _getEntriesPtr: null,
-        _getPlayerEntryPtr: null,
+    // Each async call carries the request id minted in C++ and completes through
+    // $Yes2SDKBridge (defined in lib_yes2sdk.js), so overlapping calls never share
+    // a callback slot. Strings are read before the call returns: the pointers are
+    // only valid until then.
 
-        allocateString: function (str) {
-            return stringToUTF8OnStack(str);
-        }
+    Yes2SDK_leaderboard_get: function (namePtr, requestId, callback) {
+        var name = UTF8ToString(namePtr);
+        Yes2SDKBridge.run(callback, requestId, 'leaderboard.getLeaderboardAsync', function () {
+            return [name];
+        }, function (result) {
+            return JSON.stringify(result || {});
+        });
     },
 
-    Yes2SDK_leaderboard_get: function (namePtr, callback) {
-        Yes2SDKLeaderboardCallbacks._getPtr = callback;
-        if (window.Yes2SDK && window.Yes2SDK.leaderboard) {
-            try {
-                window.Yes2SDK.leaderboard.getLeaderboardAsync(UTF8ToString(namePtr))
-                    .then(function (result) {
-                        var json = JSON.stringify(result || {});
-                        {{{ makeDynCall("vii", "Yes2SDKLeaderboardCallbacks._getPtr") }}}(1, Yes2SDKLeaderboardCallbacks.allocateString(json));
-                    })
-                    .catch(function (err) {
-                        var msg = typeof err === 'object' ? JSON.stringify(err) : String(err);
-                        {{{ makeDynCall("vii", "Yes2SDKLeaderboardCallbacks._getPtr") }}}(0, Yes2SDKLeaderboardCallbacks.allocateString(msg));
-                    });
-            } catch (e) {
-                // Synchronous throw (e.g. method missing on this platform) never reaches .catch — route it here so the Lua callback still fires.
-                {{{ makeDynCall("vii", "Yes2SDKLeaderboardCallbacks._getPtr") }}}(0, Yes2SDKLeaderboardCallbacks.allocateString(typeof e === 'object' ? JSON.stringify(e) : String(e)));
-            }
-        } else {
-            {{{ makeDynCall("vii", "Yes2SDKLeaderboardCallbacks._getPtr") }}}(0, Yes2SDKLeaderboardCallbacks.allocateString("SDK not initialized"));
-        }
-    },
-
-    Yes2SDK_leaderboard_setScore: function (namePtr, score, metadataPtr, callback) {
-        Yes2SDKLeaderboardCallbacks._setScorePtr = callback;
+    Yes2SDK_leaderboard_setScore: function (namePtr, score, metadataPtr, requestId, callback) {
+        var name = UTF8ToString(namePtr);
         var metadata = UTF8ToString(metadataPtr);
-        if (window.Yes2SDK && window.Yes2SDK.leaderboard) {
-            try {
-                window.Yes2SDK.leaderboard.setScoreAsync(UTF8ToString(namePtr), score, metadata || undefined)
-                    .then(function (result) {
-                        var json = JSON.stringify(result || {});
-                        {{{ makeDynCall("vii", "Yes2SDKLeaderboardCallbacks._setScorePtr") }}}(1, Yes2SDKLeaderboardCallbacks.allocateString(json));
-                    })
-                    .catch(function (err) {
-                        var msg = typeof err === 'object' ? JSON.stringify(err) : String(err);
-                        {{{ makeDynCall("vii", "Yes2SDKLeaderboardCallbacks._setScorePtr") }}}(0, Yes2SDKLeaderboardCallbacks.allocateString(msg));
-                    });
-            } catch (e) {
-                {{{ makeDynCall("vii", "Yes2SDKLeaderboardCallbacks._setScorePtr") }}}(0, Yes2SDKLeaderboardCallbacks.allocateString(typeof e === 'object' ? JSON.stringify(e) : String(e)));
-            }
-        } else {
-            {{{ makeDynCall("vii", "Yes2SDKLeaderboardCallbacks._setScorePtr") }}}(0, Yes2SDKLeaderboardCallbacks.allocateString("SDK not initialized"));
-        }
+        Yes2SDKBridge.run(callback, requestId, 'leaderboard.setScoreAsync', function () {
+            return [name, score, metadata || undefined];
+        }, function (result) {
+            return JSON.stringify(result || {});
+        });
     },
 
-    Yes2SDK_leaderboard_getEntries: function (namePtr, count, offset, callback) {
-        Yes2SDKLeaderboardCallbacks._getEntriesPtr = callback;
-        if (window.Yes2SDK && window.Yes2SDK.leaderboard) {
-            try {
-                window.Yes2SDK.leaderboard.getEntriesAsync(UTF8ToString(namePtr), count, offset)
-                    .then(function (result) {
-                        var json = JSON.stringify(result || []);
-                        {{{ makeDynCall("vii", "Yes2SDKLeaderboardCallbacks._getEntriesPtr") }}}(1, Yes2SDKLeaderboardCallbacks.allocateString(json));
-                    })
-                    .catch(function (err) {
-                        var msg = typeof err === 'object' ? JSON.stringify(err) : String(err);
-                        {{{ makeDynCall("vii", "Yes2SDKLeaderboardCallbacks._getEntriesPtr") }}}(0, Yes2SDKLeaderboardCallbacks.allocateString(msg));
-                    });
-            } catch (e) {
-                {{{ makeDynCall("vii", "Yes2SDKLeaderboardCallbacks._getEntriesPtr") }}}(0, Yes2SDKLeaderboardCallbacks.allocateString(typeof e === 'object' ? JSON.stringify(e) : String(e)));
-            }
-        } else {
-            {{{ makeDynCall("vii", "Yes2SDKLeaderboardCallbacks._getEntriesPtr") }}}(0, Yes2SDKLeaderboardCallbacks.allocateString("SDK not initialized"));
-        }
+    Yes2SDK_leaderboard_getEntries: function (namePtr, count, offset, requestId, callback) {
+        var name = UTF8ToString(namePtr);
+        Yes2SDKBridge.run(callback, requestId, 'leaderboard.getEntriesAsync', function () {
+            return [name, count, offset];
+        }, function (result) {
+            return JSON.stringify(result || []);
+        });
     },
 
-    Yes2SDK_leaderboard_getPlayerEntry: function (namePtr, callback) {
-        Yes2SDKLeaderboardCallbacks._getPlayerEntryPtr = callback;
-        if (window.Yes2SDK && window.Yes2SDK.leaderboard) {
-            try {
-                window.Yes2SDK.leaderboard.getPlayerEntryAsync(UTF8ToString(namePtr))
-                    .then(function (result) {
-                        // result may be null when the player is not ranked — pass JSON "null".
-                        var json = JSON.stringify(result === undefined ? null : result);
-                        {{{ makeDynCall("vii", "Yes2SDKLeaderboardCallbacks._getPlayerEntryPtr") }}}(1, Yes2SDKLeaderboardCallbacks.allocateString(json));
-                    })
-                    .catch(function (err) {
-                        var msg = typeof err === 'object' ? JSON.stringify(err) : String(err);
-                        {{{ makeDynCall("vii", "Yes2SDKLeaderboardCallbacks._getPlayerEntryPtr") }}}(0, Yes2SDKLeaderboardCallbacks.allocateString(msg));
-                    });
-            } catch (e) {
-                {{{ makeDynCall("vii", "Yes2SDKLeaderboardCallbacks._getPlayerEntryPtr") }}}(0, Yes2SDKLeaderboardCallbacks.allocateString(typeof e === 'object' ? JSON.stringify(e) : String(e)));
-            }
-        } else {
-            {{{ makeDynCall("vii", "Yes2SDKLeaderboardCallbacks._getPlayerEntryPtr") }}}(0, Yes2SDKLeaderboardCallbacks.allocateString("SDK not initialized"));
-        }
+    Yes2SDK_leaderboard_getPlayerEntry: function (namePtr, requestId, callback) {
+        var name = UTF8ToString(namePtr);
+        // result may be null when the player is not ranked: the default mapping passes JSON "null".
+        Yes2SDKBridge.run(callback, requestId, 'leaderboard.getPlayerEntryAsync', function () {
+            return [name];
+        });
     },
 
     Yes2SDK_leaderboard_isSupported: function () {
@@ -108,5 +51,5 @@ var Yes2SDKLeaderboardLib = {
     }
 }
 
-autoAddDeps(Yes2SDKLeaderboardLib, '$Yes2SDKLeaderboardCallbacks');
+autoAddDeps(Yes2SDKLeaderboardLib, '$Yes2SDKBridge');
 addToLibrary(Yes2SDKLeaderboardLib);

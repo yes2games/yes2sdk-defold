@@ -1,16 +1,6 @@
 var Yes2SDKPlayerLib = {
 
     $Yes2SDKPlayerCallbacks: {
-        _getPlayerPtr: null,
-        _getDataPtr: null,
-        _setDataPtr: null,
-        _getUniqueIdPtr: null,
-        _getIdsPerGamePtr: null,
-        _getPayingStatusPtr: null,
-        _getModePtr: null,
-        _getPhotoPtr: null,
-        _getSignedInfoPtr: null,
-
         // Synchronous getName/getId serve from this cache. Core's player identity
         // API is async (getPlayer() returns a Promise), so we prime the cache from
         // the public getPlayer() on first access and return the resolved values on
@@ -19,6 +9,8 @@ var Yes2SDKPlayerLib = {
         _cachedId: null,
         _identityFetching: false,
 
+        // Only the synchronous getName/getId returns use this: the bytes are freed when
+        // the C caller returns. Async completions go through $Yes2SDKBridge.
         allocateString: function (str) {
             return stringToUTF8OnStack(str);
         },
@@ -78,193 +70,85 @@ var Yes2SDKPlayerLib = {
         return 0;
     },
 
-    Yes2SDK_player_getData: function (keysJsonPtr, callback) {
-        Yes2SDKPlayerCallbacks._getDataPtr = callback;
+    // Each async call carries the request id minted in C++ and completes through
+    // $Yes2SDKBridge (defined in lib_yes2sdk.js), so overlapping calls never share
+    // a callback slot. Strings are read before the call returns: the pointers are
+    // only valid until then.
+
+    Yes2SDK_player_getData: function (keysJsonPtr, requestId, callback) {
         var keys;
         try { keys = JSON.parse(UTF8ToString(keysJsonPtr) || "[]"); }
         catch (e) {
-            {{{ makeDynCall("vii", "Yes2SDKPlayerCallbacks._getDataPtr") }}}(0, Yes2SDKPlayerCallbacks.allocateString("Invalid JSON: " + String(e)));
+            // Invalid input fails without calling Core, even when the SDK is missing.
+            Yes2SDKBridge.complete(callback, requestId, false,
+                Yes2SDKBridge.errorJson("Invalid JSON: " + String(e), 'INVALID_PARAM', 'player.getDataAsync'));
             return;
         }
-
-        if (window.Yes2SDK && window.Yes2SDK.player) {
-            try {
-                window.Yes2SDK.player.getDataAsync(keys)
-                    .then(function (data) {
-                        var json = JSON.stringify(data || {});
-                        {{{ makeDynCall("vii", "Yes2SDKPlayerCallbacks._getDataPtr") }}}(1, Yes2SDKPlayerCallbacks.allocateString(json));
-                    })
-                    .catch(function (err) {
-                        var msg = typeof err === 'object' ? JSON.stringify(err) : String(err);
-                        {{{ makeDynCall("vii", "Yes2SDKPlayerCallbacks._getDataPtr") }}}(0, Yes2SDKPlayerCallbacks.allocateString(msg));
-                    });
-            } catch (e) {
-                // Synchronous throw (e.g. method missing on this platform) never reaches .catch — route it here so the Lua callback still fires.
-                {{{ makeDynCall("vii", "Yes2SDKPlayerCallbacks._getDataPtr") }}}(0, Yes2SDKPlayerCallbacks.allocateString(typeof e === 'object' ? JSON.stringify(e) : String(e)));
-            }
-        } else {
-            {{{ makeDynCall("vii", "Yes2SDKPlayerCallbacks._getDataPtr") }}}(0, Yes2SDKPlayerCallbacks.allocateString("SDK not initialized"));
-        }
+        Yes2SDKBridge.run(callback, requestId, 'player.getDataAsync', function () {
+            return [keys];
+        }, function (data) {
+            return JSON.stringify(data || {});
+        });
     },
 
-    Yes2SDK_player_setData: function (dataJsonPtr, callback) {
-        Yes2SDKPlayerCallbacks._setDataPtr = callback;
+    Yes2SDK_player_setData: function (dataJsonPtr, requestId, callback) {
         var data;
         try { data = JSON.parse(UTF8ToString(dataJsonPtr) || "{}"); }
         catch (e) {
-            {{{ makeDynCall("vii", "Yes2SDKPlayerCallbacks._setDataPtr") }}}(0, Yes2SDKPlayerCallbacks.allocateString("Invalid JSON: " + String(e)));
+            Yes2SDKBridge.complete(callback, requestId, false,
+                Yes2SDKBridge.errorJson("Invalid JSON: " + String(e), 'INVALID_PARAM', 'player.setDataAsync'));
             return;
         }
-
-        if (window.Yes2SDK && window.Yes2SDK.player) {
-            try {
-                window.Yes2SDK.player.setDataAsync(data)
-                    .then(function () {
-                        {{{ makeDynCall("vii", "Yes2SDKPlayerCallbacks._setDataPtr") }}}(1, 0);
-                    })
-                    .catch(function (err) {
-                        var msg = typeof err === 'object' ? JSON.stringify(err) : String(err);
-                        {{{ makeDynCall("vii", "Yes2SDKPlayerCallbacks._setDataPtr") }}}(0, Yes2SDKPlayerCallbacks.allocateString(msg));
-                    });
-            } catch (e) {
-                // Synchronous throw (e.g. method missing on this platform) never reaches .catch — route it here so the Lua callback still fires.
-                {{{ makeDynCall("vii", "Yes2SDKPlayerCallbacks._setDataPtr") }}}(0, Yes2SDKPlayerCallbacks.allocateString(typeof e === 'object' ? JSON.stringify(e) : String(e)));
-            }
-        } else {
-            {{{ makeDynCall("vii", "Yes2SDKPlayerCallbacks._setDataPtr") }}}(0, Yes2SDKPlayerCallbacks.allocateString("SDK not initialized"));
-        }
+        // Success carries no payload (nil in Lua).
+        Yes2SDKBridge.run(callback, requestId, 'player.setDataAsync', function () {
+            return [data];
+        }, function () {
+            return null;
+        });
     },
 
-    Yes2SDK_player_getUniqueId: function (callback) {
-        Yes2SDKPlayerCallbacks._getUniqueIdPtr = callback;
-        if (window.Yes2SDK && window.Yes2SDK.player) {
-            try {
-                window.Yes2SDK.player.getUniqueId()
-                    .then(function (id) {
-                        {{{ makeDynCall("vii", "Yes2SDKPlayerCallbacks._getUniqueIdPtr") }}}(1, Yes2SDKPlayerCallbacks.allocateString(String(id == null ? "" : id)));
-                    })
-                    .catch(function (err) {
-                        var msg = typeof err === 'object' ? JSON.stringify(err) : String(err);
-                        {{{ makeDynCall("vii", "Yes2SDKPlayerCallbacks._getUniqueIdPtr") }}}(0, Yes2SDKPlayerCallbacks.allocateString(msg));
-                    });
-            } catch (e) {
-                // Synchronous throw (e.g. method missing on this platform) never reaches .catch — route it here so the Lua callback still fires.
-                {{{ makeDynCall("vii", "Yes2SDKPlayerCallbacks._getUniqueIdPtr") }}}(0, Yes2SDKPlayerCallbacks.allocateString(typeof e === 'object' ? JSON.stringify(e) : String(e)));
-            }
-        } else {
-            {{{ makeDynCall("vii", "Yes2SDKPlayerCallbacks._getUniqueIdPtr") }}}(0, Yes2SDKPlayerCallbacks.allocateString("SDK not initialized"));
-        }
+    Yes2SDK_player_getUniqueId: function (requestId, callback) {
+        Yes2SDKBridge.run(callback, requestId, 'player.getUniqueId', null, function (id) {
+            return String(id == null ? "" : id);
+        });
     },
 
-    Yes2SDK_player_getIdsPerGame: function (callback) {
-        Yes2SDKPlayerCallbacks._getIdsPerGamePtr = callback;
-        if (window.Yes2SDK && window.Yes2SDK.player) {
-            try {
-                window.Yes2SDK.player.getIDsPerGame()
-                    .then(function (ids) {
-                        {{{ makeDynCall("vii", "Yes2SDKPlayerCallbacks._getIdsPerGamePtr") }}}(1, Yes2SDKPlayerCallbacks.allocateString(JSON.stringify(ids || [])));
-                    })
-                    .catch(function (err) {
-                        var msg = typeof err === 'object' ? JSON.stringify(err) : String(err);
-                        {{{ makeDynCall("vii", "Yes2SDKPlayerCallbacks._getIdsPerGamePtr") }}}(0, Yes2SDKPlayerCallbacks.allocateString(msg));
-                    });
-            } catch (e) {
-                // Synchronous throw (e.g. method missing on this platform) never reaches .catch — route it here so the Lua callback still fires.
-                {{{ makeDynCall("vii", "Yes2SDKPlayerCallbacks._getIdsPerGamePtr") }}}(0, Yes2SDKPlayerCallbacks.allocateString(typeof e === 'object' ? JSON.stringify(e) : String(e)));
-            }
-        } else {
-            {{{ makeDynCall("vii", "Yes2SDKPlayerCallbacks._getIdsPerGamePtr") }}}(0, Yes2SDKPlayerCallbacks.allocateString("SDK not initialized"));
-        }
+    Yes2SDK_player_getIdsPerGame: function (requestId, callback) {
+        Yes2SDKBridge.run(callback, requestId, 'player.getIDsPerGame', null, function (ids) {
+            return JSON.stringify(ids || []);
+        });
     },
 
-    Yes2SDK_player_getPayingStatus: function (callback) {
-        Yes2SDKPlayerCallbacks._getPayingStatusPtr = callback;
-        if (window.Yes2SDK && window.Yes2SDK.player) {
-            try {
-                window.Yes2SDK.player.getPayingStatus()
-                    .then(function (status) {
-                        {{{ makeDynCall("vii", "Yes2SDKPlayerCallbacks._getPayingStatusPtr") }}}(1, Yes2SDKPlayerCallbacks.allocateString(String(status == null ? "unknown" : status)));
-                    })
-                    .catch(function (err) {
-                        var msg = typeof err === 'object' ? JSON.stringify(err) : String(err);
-                        {{{ makeDynCall("vii", "Yes2SDKPlayerCallbacks._getPayingStatusPtr") }}}(0, Yes2SDKPlayerCallbacks.allocateString(msg));
-                    });
-            } catch (e) {
-                // Synchronous throw (e.g. method missing on this platform) never reaches .catch — route it here so the Lua callback still fires.
-                {{{ makeDynCall("vii", "Yes2SDKPlayerCallbacks._getPayingStatusPtr") }}}(0, Yes2SDKPlayerCallbacks.allocateString(typeof e === 'object' ? JSON.stringify(e) : String(e)));
-            }
-        } else {
-            {{{ makeDynCall("vii", "Yes2SDKPlayerCallbacks._getPayingStatusPtr") }}}(0, Yes2SDKPlayerCallbacks.allocateString("SDK not initialized"));
-        }
+    Yes2SDK_player_getPayingStatus: function (requestId, callback) {
+        Yes2SDKBridge.run(callback, requestId, 'player.getPayingStatus', null, function (status) {
+            return String(status == null ? "unknown" : status);
+        });
     },
 
-    Yes2SDK_player_getMode: function (callback) {
-        Yes2SDKPlayerCallbacks._getModePtr = callback;
-        if (window.Yes2SDK && window.Yes2SDK.player) {
-            try {
-                window.Yes2SDK.player.getMode()
-                    .then(function (mode) {
-                        {{{ makeDynCall("vii", "Yes2SDKPlayerCallbacks._getModePtr") }}}(1, Yes2SDKPlayerCallbacks.allocateString(String(mode == null ? "unknown" : mode)));
-                    })
-                    .catch(function (err) {
-                        var msg = typeof err === 'object' ? JSON.stringify(err) : String(err);
-                        {{{ makeDynCall("vii", "Yes2SDKPlayerCallbacks._getModePtr") }}}(0, Yes2SDKPlayerCallbacks.allocateString(msg));
-                    });
-            } catch (e) {
-                // Synchronous throw (e.g. method missing on this platform) never reaches .catch — route it here so the Lua callback still fires.
-                {{{ makeDynCall("vii", "Yes2SDKPlayerCallbacks._getModePtr") }}}(0, Yes2SDKPlayerCallbacks.allocateString(typeof e === 'object' ? JSON.stringify(e) : String(e)));
-            }
-        } else {
-            {{{ makeDynCall("vii", "Yes2SDKPlayerCallbacks._getModePtr") }}}(0, Yes2SDKPlayerCallbacks.allocateString("SDK not initialized"));
-        }
+    Yes2SDK_player_getMode: function (requestId, callback) {
+        Yes2SDKBridge.run(callback, requestId, 'player.getMode', null, function (mode) {
+            return String(mode == null ? "unknown" : mode);
+        });
     },
 
-    Yes2SDK_player_getPhoto: function (sizePtr, callback) {
-        Yes2SDKPlayerCallbacks._getPhotoPtr = callback;
+    Yes2SDK_player_getPhoto: function (sizePtr, requestId, callback) {
         var size = UTF8ToString(sizePtr);
-        if (window.Yes2SDK && window.Yes2SDK.player) {
-            try {
-                window.Yes2SDK.player.getPhoto(size || undefined)
-                    .then(function (url) {
-                        // url may be null when no photo is available — pass JSON "null".
-                        {{{ makeDynCall("vii", "Yes2SDKPlayerCallbacks._getPhotoPtr") }}}(1, Yes2SDKPlayerCallbacks.allocateString(JSON.stringify(url === undefined ? null : url)));
-                    })
-                    .catch(function (err) {
-                        var msg = typeof err === 'object' ? JSON.stringify(err) : String(err);
-                        {{{ makeDynCall("vii", "Yes2SDKPlayerCallbacks._getPhotoPtr") }}}(0, Yes2SDKPlayerCallbacks.allocateString(msg));
-                    });
-            } catch (e) {
-                // Synchronous throw (e.g. method missing on this platform) never reaches .catch — route it here so the Lua callback still fires.
-                {{{ makeDynCall("vii", "Yes2SDKPlayerCallbacks._getPhotoPtr") }}}(0, Yes2SDKPlayerCallbacks.allocateString(typeof e === 'object' ? JSON.stringify(e) : String(e)));
-            }
-        } else {
-            {{{ makeDynCall("vii", "Yes2SDKPlayerCallbacks._getPhotoPtr") }}}(0, Yes2SDKPlayerCallbacks.allocateString("SDK not initialized"));
-        }
+        // url may be null when no photo is available: the default mapping passes JSON "null".
+        Yes2SDKBridge.run(callback, requestId, 'player.getPhoto', function () {
+            return [size || undefined];
+        });
     },
 
-    Yes2SDK_player_getSignedInfo: function (payloadPtr, callback) {
-        Yes2SDKPlayerCallbacks._getSignedInfoPtr = callback;
+    Yes2SDK_player_getSignedInfo: function (payloadPtr, requestId, callback) {
         var payload = UTF8ToString(payloadPtr);
-        if (window.Yes2SDK && window.Yes2SDK.player) {
-            try {
-                window.Yes2SDK.player.getSignedPlayerInfoAsync(payload || undefined)
-                    .then(function (info) {
-                        var json = JSON.stringify(info || {});
-                        {{{ makeDynCall("vii", "Yes2SDKPlayerCallbacks._getSignedInfoPtr") }}}(1, Yes2SDKPlayerCallbacks.allocateString(json));
-                    })
-                    .catch(function (err) {
-                        var msg = typeof err === 'object' ? JSON.stringify(err) : String(err);
-                        {{{ makeDynCall("vii", "Yes2SDKPlayerCallbacks._getSignedInfoPtr") }}}(0, Yes2SDKPlayerCallbacks.allocateString(msg));
-                    });
-            } catch (e) {
-                // Synchronous throw (e.g. method missing on this platform) never reaches .catch — route it here so the Lua callback still fires.
-                {{{ makeDynCall("vii", "Yes2SDKPlayerCallbacks._getSignedInfoPtr") }}}(0, Yes2SDKPlayerCallbacks.allocateString(typeof e === 'object' ? JSON.stringify(e) : String(e)));
-            }
-        } else {
-            {{{ makeDynCall("vii", "Yes2SDKPlayerCallbacks._getSignedInfoPtr") }}}(0, Yes2SDKPlayerCallbacks.allocateString("SDK not initialized"));
-        }
+        Yes2SDKBridge.run(callback, requestId, 'player.getSignedPlayerInfoAsync', function () {
+            return [payload || undefined];
+        }, function (info) {
+            return JSON.stringify(info || {});
+        });
     }
 }
 
 autoAddDeps(Yes2SDKPlayerLib, '$Yes2SDKPlayerCallbacks');
+autoAddDeps(Yes2SDKPlayerLib, '$Yes2SDKBridge');
 addToLibrary(Yes2SDKPlayerLib);

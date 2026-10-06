@@ -53,6 +53,7 @@ node ci/verify-release-state.mjs
 node ci/sync-release-version.mjs --check
 node ci/check-web-js-syntax.mjs
 node --test ci/test/*.test.mjs
+lua5.1 ci/test/lua/run.lua   # needs Lua 5.1 on PATH as lua5.1 (e.g. apt install lua5.1)
 ```
 
 To reproduce a Bob lane, read the pinned versions from `ci/defold-toolchain.json`,

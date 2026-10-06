@@ -1,99 +1,52 @@
 var Yes2SDKStatsLib = {
 
-    $Yes2SDKStatsCallbacks: {
-        _getPtr: null,
-        _setPtr: null,
-        _incrementPtr: null,
+    // Each async call carries the request id minted in C++ and completes through
+    // $Yes2SDKBridge (defined in lib_yes2sdk.js), so overlapping calls never share
+    // a callback slot. Strings are read before the call returns: the pointers are
+    // only valid until then.
 
-        allocateString: function (str) {
-            return stringToUTF8OnStack(str);
+    // Invalid JSON fails the request without calling Core, and before the SDK is
+    // looked up, as before, with an INVALID_PARAM error. An empty string means the
+    // default for that call.
+    $Yes2SDKStatsParse: function (ptr, fallback, requestId, callback, context) {
+        try {
+            return { value: JSON.parse(UTF8ToString(ptr) || fallback) };
+        } catch (e) {
+            Yes2SDKBridge.complete(callback, requestId, 0,
+                Yes2SDKBridge.errorJson('Invalid JSON: ' + String(e), 'INVALID_PARAM', context));
+            return null;
         }
     },
 
-    Yes2SDK_stats_get: function (keysJsonPtr, callback) {
-        Yes2SDKStatsCallbacks._getPtr = callback;
-        var keys;
-        try { keys = JSON.parse(UTF8ToString(keysJsonPtr) || "[]"); }
-        catch (e) {
-            {{{ makeDynCall("vii", "Yes2SDKStatsCallbacks._getPtr") }}}(0, Yes2SDKStatsCallbacks.allocateString("Invalid JSON: " + String(e)));
-            return;
-        }
-
-        if (window.Yes2SDK && window.Yes2SDK.stats) {
-            try {
-                window.Yes2SDK.stats.getStatsAsync(keys)
-                    .then(function (result) {
-                        var json = JSON.stringify(result || {});
-                        {{{ makeDynCall("vii", "Yes2SDKStatsCallbacks._getPtr") }}}(1, Yes2SDKStatsCallbacks.allocateString(json));
-                    })
-                    .catch(function (err) {
-                        var msg = typeof err === 'object' ? JSON.stringify(err) : String(err);
-                        {{{ makeDynCall("vii", "Yes2SDKStatsCallbacks._getPtr") }}}(0, Yes2SDKStatsCallbacks.allocateString(msg));
-                    });
-            } catch (e) {
-                // Synchronous throw (e.g. method missing on this platform) never reaches .catch — route it here so the Lua callback still fires.
-                {{{ makeDynCall("vii", "Yes2SDKStatsCallbacks._getPtr") }}}(0, Yes2SDKStatsCallbacks.allocateString(typeof e === 'object' ? JSON.stringify(e) : String(e)));
-            }
-        } else {
-            {{{ makeDynCall("vii", "Yes2SDKStatsCallbacks._getPtr") }}}(0, Yes2SDKStatsCallbacks.allocateString("SDK not initialized"));
-        }
+    Yes2SDK_stats_get: function (keysJsonPtr, requestId, callback) {
+        var parsed = Yes2SDKStatsParse(keysJsonPtr, '[]', requestId, callback, 'stats.getStatsAsync');
+        if (!parsed) return;
+        Yes2SDKBridge.run(callback, requestId, 'stats.getStatsAsync', function () {
+            return [parsed.value];
+        }, function (result) {
+            return JSON.stringify(result || {});
+        });
     },
 
-    Yes2SDK_stats_set: function (statsJsonPtr, callback) {
-        Yes2SDKStatsCallbacks._setPtr = callback;
-        var stats;
-        try { stats = JSON.parse(UTF8ToString(statsJsonPtr) || "{}"); }
-        catch (e) {
-            {{{ makeDynCall("vii", "Yes2SDKStatsCallbacks._setPtr") }}}(0, Yes2SDKStatsCallbacks.allocateString("Invalid JSON: " + String(e)));
-            return;
-        }
-
-        if (window.Yes2SDK && window.Yes2SDK.stats) {
-            try {
-                window.Yes2SDK.stats.setStatsAsync(stats)
-                    .then(function () {
-                        {{{ makeDynCall("vii", "Yes2SDKStatsCallbacks._setPtr") }}}(1, 0);
-                    })
-                    .catch(function (err) {
-                        var msg = typeof err === 'object' ? JSON.stringify(err) : String(err);
-                        {{{ makeDynCall("vii", "Yes2SDKStatsCallbacks._setPtr") }}}(0, Yes2SDKStatsCallbacks.allocateString(msg));
-                    });
-            } catch (e) {
-                // Synchronous throw (e.g. method missing on this platform) never reaches .catch — route it here so the Lua callback still fires.
-                {{{ makeDynCall("vii", "Yes2SDKStatsCallbacks._setPtr") }}}(0, Yes2SDKStatsCallbacks.allocateString(typeof e === 'object' ? JSON.stringify(e) : String(e)));
-            }
-        } else {
-            {{{ makeDynCall("vii", "Yes2SDKStatsCallbacks._setPtr") }}}(0, Yes2SDKStatsCallbacks.allocateString("SDK not initialized"));
-        }
+    Yes2SDK_stats_set: function (statsJsonPtr, requestId, callback) {
+        var parsed = Yes2SDKStatsParse(statsJsonPtr, '{}', requestId, callback, 'stats.setStatsAsync');
+        if (!parsed) return;
+        // setStatsAsync resolves void: report success with no payload.
+        Yes2SDKBridge.run(callback, requestId, 'stats.setStatsAsync', function () {
+            return [parsed.value];
+        }, function () {
+            return null;
+        });
     },
 
-    Yes2SDK_stats_increment: function (incrementsJsonPtr, callback) {
-        Yes2SDKStatsCallbacks._incrementPtr = callback;
-        var increments;
-        try { increments = JSON.parse(UTF8ToString(incrementsJsonPtr) || "{}"); }
-        catch (e) {
-            {{{ makeDynCall("vii", "Yes2SDKStatsCallbacks._incrementPtr") }}}(0, Yes2SDKStatsCallbacks.allocateString("Invalid JSON: " + String(e)));
-            return;
-        }
-
-        if (window.Yes2SDK && window.Yes2SDK.stats) {
-            try {
-                window.Yes2SDK.stats.incrementStatsAsync(increments)
-                    .then(function (result) {
-                        var json = JSON.stringify(result || {});
-                        {{{ makeDynCall("vii", "Yes2SDKStatsCallbacks._incrementPtr") }}}(1, Yes2SDKStatsCallbacks.allocateString(json));
-                    })
-                    .catch(function (err) {
-                        var msg = typeof err === 'object' ? JSON.stringify(err) : String(err);
-                        {{{ makeDynCall("vii", "Yes2SDKStatsCallbacks._incrementPtr") }}}(0, Yes2SDKStatsCallbacks.allocateString(msg));
-                    });
-            } catch (e) {
-                // Synchronous throw (e.g. method missing on this platform) never reaches .catch — route it here so the Lua callback still fires.
-                {{{ makeDynCall("vii", "Yes2SDKStatsCallbacks._incrementPtr") }}}(0, Yes2SDKStatsCallbacks.allocateString(typeof e === 'object' ? JSON.stringify(e) : String(e)));
-            }
-        } else {
-            {{{ makeDynCall("vii", "Yes2SDKStatsCallbacks._incrementPtr") }}}(0, Yes2SDKStatsCallbacks.allocateString("SDK not initialized"));
-        }
+    Yes2SDK_stats_increment: function (incrementsJsonPtr, requestId, callback) {
+        var parsed = Yes2SDKStatsParse(incrementsJsonPtr, '{}', requestId, callback, 'stats.incrementStatsAsync');
+        if (!parsed) return;
+        Yes2SDKBridge.run(callback, requestId, 'stats.incrementStatsAsync', function () {
+            return [parsed.value];
+        }, function (result) {
+            return JSON.stringify(result || {});
+        });
     },
 
     Yes2SDK_stats_isSupported: function () {
@@ -106,5 +59,6 @@ var Yes2SDKStatsLib = {
     }
 }
 
-autoAddDeps(Yes2SDKStatsLib, '$Yes2SDKStatsCallbacks');
+autoAddDeps(Yes2SDKStatsLib, '$Yes2SDKBridge');
+autoAddDeps(Yes2SDKStatsLib, '$Yes2SDKStatsParse');
 addToLibrary(Yes2SDKStatsLib);

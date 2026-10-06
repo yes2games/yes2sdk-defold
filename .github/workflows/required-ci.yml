@@ -153,6 +153,28 @@ jobs:
       - name: Syntax check every tracked yes2sdk/lib/web/*.js
         run: node ci/check-web-js-syntax.mjs
 
+  # The Lua wrapper (yes2sdk/yes2sdk.lua) runs on Lua 5.1 semantics in HTML5
+  # builds, so its tests run on a real lua5.1 here, in a job of their own. It is
+  # not folded into ci-tests behind a node wrapper: that job has no Lua, and a
+  # wrapper that skips when lua5.1 is missing would pass by vacuity.
+  lua-tests:
+    name: Lua 5.1 wrapper tests
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install Lua 5.1
+        run: sudo apt-get update && sudo apt-get install -y lua5.1
+
+      - name: Report the Lua version
+        run: lua5.1 -v
+
+      - name: Run the Lua wrapper suite
+        run: lua5.1 ci/test/lua/run.lua
+
   bob:
     name: Bob ${{ matrix.lane }} (Defold ${{ matrix.defold }} / Java ${{ matrix.java }})
     runs-on: ubuntu-24.04
@@ -313,6 +335,7 @@ jobs:
       - dependency-archive
       - ci-tests
       - web-js-syntax
+      - lua-tests
       - bob
     if: always()
     runs-on: ubuntu-24.04

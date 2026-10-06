@@ -27,3 +27,22 @@ void lua_pushlistener(lua_State *L, struct lua_Listener &listener) {
     dmScript::SetInstance(L);
     assert(top + 2 == lua_gettop(L));
 }
+
+void lua_unreflistener(lua_State *L, struct lua_Listener &listener) {
+    if (listener.m_Callback != LUA_NOREF) {
+        dmScript::Unref(L, LUA_REGISTRYINDEX, listener.m_Callback);
+    }
+    if (listener.m_Self != LUA_NOREF) {
+        dmScript::Unref(L, LUA_REGISTRYINDEX, listener.m_Self);
+    }
+    listener.m_Callback = LUA_NOREF;
+    listener.m_Self = LUA_NOREF;
+    listener.m_L = 0;
+}
+
+void lua_logpcallerror(lua_State *L, const char *where) {
+    const char *msg = lua_tostring(L, -1);
+    if (!msg) { msg = "(non-string error)"; }
+    dmLogError("[Yes2SDK] %s callback error: %s", where, msg);
+    lua_pop(L, 1);
+}

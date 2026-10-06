@@ -1,5 +1,135 @@
 var Yes2SDKLib = {
 
+    // Shared request bridge. Every async binding that takes (..., requestId, callback)
+    // completes through it, so each response reaches the call that made it. Other
+    // library files pull it in with __deps: ['$Yes2SDKBridge'].
+    $Yes2SDKBridge__deps: ['$stackSave', '$stackRestore', '$stringToUTF8OnStack'],
+    $Yes2SDKBridge: {
+        // Calls the C++ OnCompleteCallback(int requestId, int success, const char* payload).
+        // A null or undefined payload is passed as a null pointer (nil in Lua).
+        // Completions usually run from a promise callback, outside any wasm frame, so
+        // nothing else would give the payload's stack bytes back: save and restore the
+        // stack pointer around the call, or every completion leaks strlen(payload) + 1.
+        complete: function (cb, id, success, payload) {
+            var sp = stackSave();
+            try {
+                var ptr = (payload === null || payload === undefined) ? 0 : stringToUTF8OnStack(String(payload));
+                {{{ makeDynCall("viii", "cb") }}}(id, success ? 1 : 0, ptr);
+            } finally {
+                stackRestore(sp);
+            }
+        },
+
+        // Calls a (success, payload) callback that is not routed by request id
+        // (initialize, start_game) with the same stack discipline as complete:
+        // these also run from promise callbacks, outside any wasm frame.
+        completeUnrouted: function (cb, success, payload) {
+            var sp = stackSave();
+            try {
+                var ptr = (payload === null || payload === undefined) ? 0 : stringToUTF8OnStack(String(payload));
+                {{{ makeDynCall("vii", "cb") }}}(success ? 1 : 0, ptr);
+            } finally {
+                stackRestore(sp);
+            }
+        },
+
+        // The failure payload handed to Lua, and the one place that builds it:
+        // {"code":"...","message":"...","context":"..."}, always all three keys,
+        // all strings. code is the error's own code when it carries a non-empty
+        // string one, else fallbackCode (else UNKNOWN_ERROR). message is the
+        // error's string message, String(err) for a primitive, else a generic
+        // text. context is the error's string context, else the bridge context.
+        // Every other field (originalError included) is dropped. Never throws.
+        errorJson: function (err, fallbackCode, context) {
+            var code = (typeof fallbackCode === 'string' && fallbackCode !== '') ? fallbackCode : 'UNKNOWN_ERROR';
+            var message = 'Unknown error';
+            var where = typeof context === 'string' ? context : '';
+            var read = function (key) {
+                try {
+                    var value = err[key];
+                    return typeof value === 'string' ? value : null;
+                } catch (e) {
+                    return null;
+                }
+            };
+            try {
+                if (err !== null && (typeof err === 'object' || typeof err === 'function')) {
+                    var ownCode = read('code');
+                    var ownMessage = read('message');
+                    var ownContext = read('context');
+                    if (ownCode) code = ownCode;
+                    if (ownMessage !== null) message = ownMessage;
+                    if (ownContext !== null) where = ownContext;
+                } else {
+                    message = String(err);
+                }
+            } catch (e) {}
+            try {
+                return JSON.stringify({ code: code, message: message, context: where });
+            } catch (e2) {}
+            return '{"code":"UNKNOWN_ERROR","message":"Unknown error","context":""}';
+        },
+
+        // Calls window.Yes2SDK[module][method] for context "module.method" with the
+        // module as `this`, and completes request `id` exactly once. Every failure
+        // payload comes from errorJson:
+        // - SDK or module missing: NOT_INITIALIZED.
+        // - method missing: FEATURE_NOT_SUPPORTED.
+        // - getArgs throws, sync throw or rejection: the error's own code, else
+        //   UNKNOWN_ERROR.
+        // - resolution: success with mapResult(value); the default is
+        //   JSON.stringify(value === undefined ? null : value). A mapResult returning
+        //   null or undefined completes with a nil payload; a throwing one is a failure.
+        // getArgs (optional) returns the argument array; it runs inside the try.
+        run: function (cb, id, context, getArgs, mapResult) {
+            var done = false;
+            var finish = function (success, payload) {
+                if (done) return;
+                done = true;
+                Yes2SDKBridge.complete(cb, id, success, payload);
+            };
+            var fail = function (err, fallbackCode) {
+                finish(false, Yes2SDKBridge.errorJson(err, fallbackCode || 'UNKNOWN_ERROR', context));
+            };
+            var dot = context.indexOf('.');
+            var moduleName = context.substring(0, dot);
+            var methodName = context.substring(dot + 1);
+            var mod;
+            var result;
+            // The module lookup is inside the try too: a throwing getter on the SDK
+            // object must still complete the request.
+            try {
+                var sdk = window.Yes2SDK;
+                mod = sdk ? sdk[moduleName] : undefined;
+                if (mod) {
+                    if (typeof mod[methodName] !== 'function') {
+                        fail(context + ' is not supported by this SDK version', 'FEATURE_NOT_SUPPORTED');
+                        return;
+                    }
+                    var args = getArgs ? getArgs() : [];
+                    result = mod[methodName].apply(mod, args);
+                }
+            } catch (e) {
+                fail(e);
+                return;
+            }
+            if (!mod) {
+                fail('SDK not initialized', 'NOT_INITIALIZED');
+                return;
+            }
+            Promise.resolve(result).then(function (value) {
+                var payload;
+                try {
+                    payload = mapResult ? mapResult(value) : JSON.stringify(value === undefined ? null : value);
+                } catch (e) {
+                    fail(e);
+                    return;
+                }
+                finish(true, payload);
+            }, fail);
+        }
+    },
+
     $Yes2SDKUtils: {
         allocateString: function (str) {
             return stringToUTF8OnStack(str);
@@ -59,35 +189,59 @@ var Yes2SDKLib = {
         }
     },
 
+    Yes2SDK_initializeAsync__deps: ['$Yes2SDKBridge'],
     Yes2SDK_initializeAsync: function (callback) {
-        if (window.Yes2SDK && window.Yes2SDK.initializeAsync) {
-            Yes2SDKUtils.checkCoreVersion();
-            window.Yes2SDK.initializeAsync()
-                .then(function () {
-                    {{{ makeDynCall("vii", "callback") }}}(1, 0);
-                })
-                .catch(function (error) {
-                    var msg = typeof error === 'object' ? JSON.stringify(error) : String(error);
-                    {{{ makeDynCall("vii", "callback") }}}(0, Yes2SDKUtils.allocateString(msg));
-                });
-        } else {
-            {{{ makeDynCall("vii", "callback") }}}(0, Yes2SDKUtils.allocateString("Yes2SDK not loaded"));
+        // Failures carry the errorJson payload. They usually arrive from a promise
+        // callback, so completeUnrouted gives the payload's stack bytes back.
+        var fail = function (err, fallbackCode) {
+            Yes2SDKBridge.completeUnrouted(callback, false,
+                Yes2SDKBridge.errorJson(err, fallbackCode, 'initializeAsync'));
+        };
+        var sdk = window.Yes2SDK;
+        if (!sdk || typeof sdk.initializeAsync !== 'function') {
+            fail('Yes2SDK not loaded', 'NOT_INITIALIZED');
+            return;
         }
+        Yes2SDKUtils.checkCoreVersion();
+        var result;
+        try {
+            result = sdk.initializeAsync();
+        } catch (e) {
+            fail(e, 'UNKNOWN_ERROR');
+            return;
+        }
+        Promise.resolve(result).then(function () {
+            Yes2SDKBridge.completeUnrouted(callback, true, null);
+        }, function (error) {
+            fail(error, 'UNKNOWN_ERROR');
+        });
     },
 
+    Yes2SDK_startGameAsync__deps: ['$Yes2SDKBridge'],
     Yes2SDK_startGameAsync: function (callback) {
-        if (window.Yes2SDK && window.Yes2SDK.startGameAsync) {
-            window.Yes2SDK.startGameAsync()
-                .then(function () {
-                    {{{ makeDynCall("vii", "callback") }}}(1, 0);
-                })
-                .catch(function (error) {
-                    var msg = typeof error === 'object' ? JSON.stringify(error) : String(error);
-                    {{{ makeDynCall("vii", "callback") }}}(0, Yes2SDKUtils.allocateString(msg));
-                });
-        } else {
-            {{{ makeDynCall("vii", "callback") }}}(0, Yes2SDKUtils.allocateString("Yes2SDK not loaded"));
+        // Failures carry the errorJson payload. They usually arrive from a promise
+        // callback, so completeUnrouted gives the payload's stack bytes back.
+        var fail = function (err, fallbackCode) {
+            Yes2SDKBridge.completeUnrouted(callback, false,
+                Yes2SDKBridge.errorJson(err, fallbackCode, 'startGameAsync'));
+        };
+        var sdk = window.Yes2SDK;
+        if (!sdk || typeof sdk.startGameAsync !== 'function') {
+            fail('Yes2SDK not loaded', 'NOT_INITIALIZED');
+            return;
         }
+        var result;
+        try {
+            result = sdk.startGameAsync();
+        } catch (e) {
+            fail(e, 'UNKNOWN_ERROR');
+            return;
+        }
+        Promise.resolve(result).then(function () {
+            Yes2SDKBridge.completeUnrouted(callback, true, null);
+        }, function (error) {
+            fail(error, 'UNKNOWN_ERROR');
+        });
     },
 
     Yes2SDK_setLoadingProgress: function (progress) {

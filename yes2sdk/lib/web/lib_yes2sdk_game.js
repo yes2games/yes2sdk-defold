@@ -32,51 +32,27 @@ var Yes2SDKGameLib = {
         } catch (e) {}
     },
 
-    Yes2SDK_game_inviteLink: function (paramsJsonPtr, callback) {
-        if (window.Yes2SDK && window.Yes2SDK.game) {
-            var params;
-            try { params = JSON.parse(UTF8ToString(paramsJsonPtr) || "{}"); }
-            catch (e) {
-                {{{ makeDynCall("vii", "callback") }}}(0, Yes2SDKGameUtils.allocateString("Invalid JSON: " + String(e)));
-                return;
-            }
-            try {
-                window.Yes2SDK.game.inviteLinkAsync(params)
-                    .then(function (url) {
-                        {{{ makeDynCall("vii", "callback") }}}(1, Yes2SDKGameUtils.allocateString(url || ""));
-                    })
-                    .catch(function (err) {
-                        {{{ makeDynCall("vii", "callback") }}}(0, Yes2SDKGameUtils.allocateString(String(err)));
-                    });
-            } catch (e) {
-                // Synchronous throw (e.g. method missing on this platform) never reaches .catch — route it here so the Lua callback still fires.
-                {{{ makeDynCall("vii", "callback") }}}(0, Yes2SDKGameUtils.allocateString(typeof e === 'object' ? JSON.stringify(e) : String(e)));
-            }
-        } else {
-            {{{ makeDynCall("vii", "callback") }}}(0, Yes2SDKGameUtils.allocateString("SDK not initialized"));
-        }
+    Yes2SDK_game_inviteLink: function (paramsJsonPtr, requestId, callback) {
+        var paramsJson = UTF8ToString(paramsJsonPtr) || "{}";
+        Yes2SDKBridge.run(callback, requestId, 'game.inviteLink', function () {
+            // Invalid JSON fails here, before Core is called. The thrown code
+            // becomes the error code of the failure payload.
+            try { JSON.parse(paramsJson); }
+            catch (e) { throw { code: 'INVALID_PARAM', message: "Invalid JSON: " + String(e) }; }
+            return [paramsJson];
+        }, function (url) {
+            return url || "";
+        });
     },
 
-    Yes2SDK_game_getServerTime: function (callback) {
-        if (window.Yes2SDK && window.Yes2SDK.game) {
-            try {
-                window.Yes2SDK.game.getServerTimeAsync()
-                    .then(function (time) {
-                        // Delivered as a numeric string; the Lua wrapper tonumber()s it.
-                        {{{ makeDynCall("vii", "callback") }}}(1, Yes2SDKGameUtils.allocateString(String(time == null ? 0 : time)));
-                    })
-                    .catch(function (err) {
-                        {{{ makeDynCall("vii", "callback") }}}(0, Yes2SDKGameUtils.allocateString(typeof err === 'object' ? JSON.stringify(err) : String(err)));
-                    });
-            } catch (e) {
-                // Synchronous throw (e.g. method missing on this platform) never reaches .catch — route it here so the Lua callback still fires.
-                {{{ makeDynCall("vii", "callback") }}}(0, Yes2SDKGameUtils.allocateString(typeof e === 'object' ? JSON.stringify(e) : String(e)));
-            }
-        } else {
-            {{{ makeDynCall("vii", "callback") }}}(0, Yes2SDKGameUtils.allocateString("SDK not initialized"));
-        }
+    Yes2SDK_game_getServerTime: function (requestId, callback) {
+        // Delivered as a numeric string; the Lua wrapper tonumber()s it.
+        Yes2SDKBridge.run(callback, requestId, 'game.getServerTimeAsync', null, function (time) {
+            return String(time == null ? 0 : time);
+        });
     }
 }
 
 autoAddDeps(Yes2SDKGameLib, '$Yes2SDKGameUtils');
+autoAddDeps(Yes2SDKGameLib, '$Yes2SDKBridge');
 addToLibrary(Yes2SDKGameLib);

@@ -1,23 +1,12 @@
 #include "yes2sdk_config.h"
-#include "luautils.h"
+#include "yes2sdk_requests.h"
 #if defined(DM_PLATFORM_HTML5)
-lua_Listener onConfigGetFlagsListener;
-
-void Yes2SDKConfig::OnGetFlags(const int success, const char* result) {
-    lua_State* L = onConfigGetFlagsListener.m_L;
-    if (!L) return;
-    int top = lua_gettop(L);
-    lua_pushlistener(L, onConfigGetFlagsListener);
-    lua_pushboolean(L, success);
-    if (result) { lua_pushstring(L, result); } else { lua_pushnil(L); }
-    int ret = lua_pcall(L, 3, 0, 0);
-    if (ret != 0) { lua_pop(L, 1); }
-    assert(top == lua_gettop(L));
-}
+// The call registers its own request (callback + script instance) and passes the id
+// through the JS bridge, so overlapping calls each complete their own callback.
 int Yes2SDKConfig::GetFlags(lua_State* L) {
     const char* optionsJson = luaL_checkstring(L, 1);
-    luaL_checklistener(L, 2, onConfigGetFlagsListener);
-    Yes2SDK_config_getFlags(optionsJson, Yes2SDKConfig::OnGetFlags);
+    int id = Yes2SDKRequests::Register(L, 2, "config_get_flags");
+    Yes2SDK_config_getFlags(optionsJson, id, Yes2SDKRequests::Complete);
     return 0;
 }
 int Yes2SDKConfig::IsSupported(lua_State* L) {
