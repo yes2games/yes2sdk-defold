@@ -14,6 +14,7 @@
 #include "yes2sdk_config.h"
 #include "yes2sdk_review.h"
 #include "yes2sdk_iap.h"
+#include "yes2sdk_referrals.h"
 #include "yes2sdk_requests.h"
 #include "luautils.h"
 #include <dmsdk/sdk.h>
@@ -365,6 +366,11 @@ static const luaL_reg Module_methods[] = {
     {"iap_get_purchases", Yes2SDKIap::GetPurchases},
     {"iap_consume_purchase", Yes2SDKIap::ConsumePurchase},
     {"iap_is_supported", Yes2SDKIap::IsSupported},
+
+    // Referrals
+    {"referrals_share", Yes2SDKReferrals::Share},
+    {"referrals_list", Yes2SDKReferrals::List},
+    {"referrals_is_supported", Yes2SDKReferrals::IsSupported},
 
     {0, 0}
 };
