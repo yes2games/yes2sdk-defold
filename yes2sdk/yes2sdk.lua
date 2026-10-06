@@ -2,7 +2,7 @@
 -- @module yes2sdk_api
 
 -- Overlapping calls to the same async function each get their own callback. Exceptions:
--- iap_purchase, iap_consume_purchase and ads_show_* reject a second call while one is open;
+-- iap_purchase, iap_consume_purchase, iap_subscribe and ads_show_* reject a second call while one is open;
 -- initialize and start_game are once per session.
 
 -- Guard: if the native extension isn't loaded (Project > Build instead of Bundle),
@@ -41,6 +41,24 @@ if not sdk then
   function sdk.config_is_supported() warn() return false end
   function sdk.review_is_supported() warn() return false end
   function sdk.iap_is_supported() warn() return false end
+  -- IAP subscriptions: unsupported, and every async call fails on the next frame
+  -- with NOT_INITIALIZED so callers waiting on a callback are not left hanging.
+  function sdk.iap_is_subscription_supported() warn() return false end
+  local function stub_fail(name, callback)
+    warn()
+    if not callback then return end
+    local err = json.encode({
+      code = "NOT_INITIALIZED",
+      message = "Yes2SDK extension not loaded",
+      context = name,
+    })
+    timer.delay(0, false, function(tself) callback(tself, false, err) end)
+  end
+  function sdk.iap_get_subscriptions(callback) stub_fail("iap_get_subscriptions", callback) end
+  function sdk.iap_subscribe(product_id, callback) stub_fail("iap_subscribe", callback) end
+  function sdk.iap_cancel_subscription(product_id, callback) stub_fail("iap_cancel_subscription", callback) end
+  function sdk.iap_claim_retention_offer(product_id, callback) stub_fail("iap_claim_retention_offer", callback) end
+  function sdk.iap_get_subscription_status(product_id, callback) stub_fail("iap_get_subscription_status", callback) end
   function sdk.ads_is_rewarded_ad_available() warn() return false end
   function sdk.ads_is_interstitial_supported() warn() return false end
   function sdk.ads_is_rewarded_supported() warn() return false end
@@ -64,6 +82,7 @@ if not sdk then
   --   mock_rewarded_result = viewed   <- or: dismissed (no-reward path)
   --   mock_ad_result = normal         <- or: nofill (ads fail, no inventory)
   --   mock_purchase_result = success  <- or: fail
+  --   mock_subscribe_result = subscribed  <- or: cancelled, fail
   --
   -- HTML5 keeps the plain warn stub: a missing extension there is a bundling
   -- mistake the developer must see, not something to paper over.
@@ -170,7 +189,7 @@ if not sdk then
       local json = '{"purchaseToken":"' .. token
         .. '","productId":"' .. json_escape(product_id)
         .. '","paymentId":"mock-payment-' .. tostring(mock_payment_counter)
-        .. '","purchaseTime":"' .. os.date("!%Y-%m-%dT%H:%M:%SZ") .. '"'
+        .. '","purchaseTime":"' .. os.date("!%Y-%m-%dT%H:%M:%SZ") .. '","isSandbox":true'
       if developer_payload and developer_payload ~= "" then
         json = json .. ',"developerPayload":"' .. json_escape(developer_payload) .. '"'
       end
@@ -231,6 +250,95 @@ if not sdk then
       end
       print("[Yes2SDK] Mock: iap_consume_purchase succeeded")
       if callback then next_frame(function(tself) callback(tself, true, nil) end) end
+    end
+
+    -- IAP subscriptions: one sample offer, and any product id can be subscribed
+    -- to. Active state lasts for the current session only.
+    local MOCK_SUBSCRIPTION_IDS = { "yes2.mock.premium.monthly" }
+    local mock_subscription_active = { ["yes2.mock.premium.monthly"] = false }
+
+    local function mock_subscription(product_id)
+      return {
+        productId = product_id,
+        title = "Premium (monthly)",
+        description = "Mock subscription product.",
+        price = "4.99 USD",
+        priceAmount = 499,
+        priceCurrencyCode = "USD",
+        billingPeriod = "monthly",
+        isActive = mock_subscription_active[product_id] == true,
+        trialEligible = false,
+        introOffer = json.null,
+        retentionOffer = { priceAmount = 249, durationPeriods = 1 },
+        isSandbox = true,
+      }
+    end
+
+    local function mock_set_subscription(product_id, active)
+      if mock_subscription_active[product_id] == nil then
+        table.insert(MOCK_SUBSCRIPTION_IDS, product_id)
+      end
+      mock_subscription_active[product_id] = active
+    end
+
+    function sdk.iap_is_subscription_supported() return true end
+
+    function sdk.iap_get_subscriptions(callback)
+      local list = {}
+      for i, id in ipairs(MOCK_SUBSCRIPTION_IDS) do list[i] = mock_subscription(id) end
+      local text = #list > 0 and json.encode(list) or "[]"
+      if callback then next_frame(function(tself) callback(tself, true, text) end) end
+    end
+
+    function sdk.iap_subscribe(product_id, callback)
+      product_id = tostring(product_id)
+      local mode = mock_config("mock_subscribe_result", "subscribed")
+      local success, payload
+      if mode == "fail" then
+        print("[Yes2SDK] Mock: iap_subscribe('" .. product_id .. "') failing (mock_subscribe_result = fail)")
+        success = false
+        payload = json.encode({
+          code = "IAP_PURCHASE_FAILED",
+          message = "Simulated subscription failure (mock)",
+          context = "iap.subscribeAsync",
+        })
+      elseif mode == "cancelled" then
+        print("[Yes2SDK] Mock: iap_subscribe('" .. product_id .. "') closed by the player (mock_subscribe_result = cancelled)")
+        success, payload = true, '{"status":"cancelled"}'
+      else
+        mock_set_subscription(product_id, true)
+        print("[Yes2SDK] Mock: iap_subscribe('" .. product_id .. "') subscribed")
+        success = true
+        payload = json.encode({ status = "subscribed", subscription = mock_subscription(product_id) })
+      end
+      if callback then next_frame(function(tself) callback(tself, success, payload) end) end
+    end
+
+    function sdk.iap_cancel_subscription(product_id, callback)
+      product_id = tostring(product_id)
+      mock_set_subscription(product_id, false)
+      print("[Yes2SDK] Mock: iap_cancel_subscription('" .. product_id .. "') cancelled")
+      if callback then next_frame(function(tself) callback(tself, true, "true") end) end
+    end
+
+    function sdk.iap_claim_retention_offer(product_id, callback)
+      product_id = tostring(product_id)
+      mock_set_subscription(product_id, true)
+      print("[Yes2SDK] Mock: iap_claim_retention_offer('" .. product_id .. "') claimed")
+      local text = json.encode(mock_subscription(product_id))
+      if callback then next_frame(function(tself) callback(tself, true, text) end) end
+    end
+
+    function sdk.iap_get_subscription_status(product_id, callback)
+      product_id = tostring(product_id)
+      local active = mock_subscription_active[product_id] == true
+      local status = { isActive = active, productId = product_id, willRenew = active }
+      if active then
+        -- 30 days from now, in milliseconds.
+        status.expiresAt = (os.time() + 30 * 24 * 60 * 60) * 1000
+      end
+      local text = json.encode(status)
+      if callback then next_frame(function(tself) callback(tself, true, text) end) end
     end
   end
 end
@@ -1267,6 +1375,87 @@ function M.session_get_entry_point_data()
   local ok, decoded = pcall(json.decode, text)
   if ok and type(decoded) == "table" then return decoded end
   return {}
+end
+
+-- ── IAP subscriptions ──
+
+-- True between an iap_subscribe call and its callback. One checkout at a time,
+-- like iap_purchase (and independent of it). A second call while one is open is
+-- rejected: logged, and its callback fails on the next frame with INVALID_OPERATION.
+local _iap_subscribe_in_flight = false
+
+--- Get the subscription offers and the player's entitlement for each.
+-- Callback signature: function(self, success, subscriptions_json) where subscriptions_json is
+-- a JSON array of '{"productId":"...","title":"...","description":"...","price":"4.99 USD",
+-- "priceAmount":499,"priceCurrencyCode":"USD","billingPeriod":"monthly","isActive":true,
+-- "trialEligible":false,"introOffer":null,"retentionOffer":null}' (plus "isSandbox" and
+-- "signedRequest" where the platform provides them). Grant the entitlement when isActive is true.
+function M.iap_get_subscriptions(callback)
+  sdk.iap_get_subscriptions(callback)
+end
+
+--- Start a subscription checkout. Never offer a subscription the player already holds.
+-- @param product_id Subscription product id (string).
+-- Callback signature: function(self, success, result_json) where result_json is
+-- '{"status":"subscribed","subscription":{...}}' or '{"status":"cancelled"}'.
+-- Rejected if a subscribe is already in flight: the callback fails on the next frame.
+function M.iap_subscribe(product_id, callback)
+  if _iap_subscribe_in_flight then
+    print("[Yes2SDK] iap_subscribe rejected: a subscribe is already in flight. Wait for its callback before calling iap_subscribe again.")
+    fail_async(callback, json.encode({
+      code = "INVALID_OPERATION",
+      message = "A subscribe is already in flight",
+      context = "iap_subscribe",
+    }))
+    return
+  end
+  _iap_subscribe_in_flight = true
+  local ok, err = pcall(sdk.iap_subscribe, product_id, function(self, success, result_json)
+    _iap_subscribe_in_flight = false
+    if callback then callback(self, success, result_json) end
+  end)
+  if not ok then
+    -- Same as iap_purchase: release the guard, then re-raise the native error.
+    _iap_subscribe_in_flight = false
+    error(_name_native_error(err, "iap_subscribe"), 0)
+  end
+end
+
+--- Cancel the player's subscription.
+-- @param product_id Subscription product id (string).
+-- Callback signature: function(self, success, result) where result is a boolean (true when
+-- the subscription was cancelled) on success, and the error JSON on failure.
+function M.iap_cancel_subscription(product_id, callback)
+  sdk.iap_cancel_subscription(product_id, function(self, success, payload)
+    if not callback then return end
+    if success then
+      callback(self, true, payload == "true")
+    else
+      callback(self, false, payload)
+    end
+  end)
+end
+
+--- Claim the retention offer of a subscription (offered when the player is about to cancel).
+-- @param product_id Subscription product id (string).
+-- Callback signature: function(self, success, subscription_json), same shape as one entry of
+-- iap_get_subscriptions.
+function M.iap_claim_retention_offer(product_id, callback)
+  sdk.iap_claim_retention_offer(product_id, callback)
+end
+
+--- Get the status of one subscription.
+-- @param product_id Subscription product id (string).
+-- Callback signature: function(self, success, status_json) where status_json is
+-- '{"isActive":true,"productId":"...","expiresAt":1767225600000,"willRenew":true}'
+-- (expiresAt in Unix milliseconds; expiresAt and willRenew only when known).
+function M.iap_get_subscription_status(product_id, callback)
+  sdk.iap_get_subscription_status(product_id, callback)
+end
+
+--- Check whether subscriptions are supported on the current platform.
+function M.iap_is_subscription_supported()
+  return sdk.iap_is_subscription_supported()
 end
 
 return M

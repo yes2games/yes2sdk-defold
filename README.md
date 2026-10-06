@@ -437,6 +437,49 @@ end)
 - The catalog: `iap_get_catalog(callback)` returns a JSON array of products (`productId`, `title`, `description`, `imageUri`, `price`, `priceCurrencyCode`, `priceAmount`); `iap_get_product(product_id, callback)` returns one product, or the literal `"null"` when the id is unknown.
 - Failures carry an error code, see [Errors](#errors). In the editor, purchases run against a mock: `mock_purchase_result = fail` in `game.project` tests the failure path (see [Editor Testing](#editor-testing)).
 
+#### Subscriptions
+
+On platforms that support it, players can subscribe to a product. Gate subscription UI on `iap_is_subscription_supported()`.
+
+```lua
+local PREMIUM = "premium_monthly"
+
+if yes2sdk.iap_is_subscription_supported() then
+    yes2sdk.iap_get_subscriptions(function(self, success, subscriptions_json)
+        if not success then return end
+        for _, sub in ipairs(json.decode(subscriptions_json)) do
+            if sub.productId == PREMIUM then
+                if sub.isActive then
+                    grant_premium()                -- already subscribed: never offer it again
+                else
+                    show_subscribe_button(sub)     -- sub.price, sub.billingPeriod, sub.trialEligible
+                end
+            end
+        end
+    end)
+end
+
+-- When the player taps the button:
+yes2sdk.iap_subscribe(PREMIUM, function(self, success, result_json)
+    if success then
+        local result = json.decode(result_json)
+        if result.status == "subscribed" then
+            grant_premium()
+        end                                        -- "cancelled": the player closed the checkout
+    elseif yes2sdk.parse_error(result_json).code ~= "IAP_PURCHASE_CANCELLED" then
+        show_purchase_failed()
+    end
+end)
+```
+
+- **Never re-offer a subscription the player already holds.** Check `isActive` from `iap_get_subscriptions`, or `iap_get_subscription_status(product_id, callback)`, before showing a subscribe button.
+- `iap_subscribe(product_id, callback)` returns `{"status":"subscribed","subscription":{...}}`, or `{"status":"cancelled"}` when the player closed the checkout. A closed checkout can also arrive as a failure with code `IAP_PURCHASE_CANCELLED` (read it with `parse_error`): treat it as a change of mind, not an error. One subscribe at a time: a second call while one is open fails on the next frame with `INVALID_OPERATION`.
+- Subscription JSON fields: `productId`, `title`, `description`, `price`, `priceAmount`, `priceCurrencyCode`, `billingPeriod` (`weekly`, `monthly` or `yearly`), `isActive` (grant the entitlement when true), `trialEligible`, `introOffer` and `retentionOffer` (`{priceAmount, durationPeriods}` or `null`), and where the platform provides them `isSandbox` and `signedRequest`. Verify `signedRequest` on your own server, as for purchases.
+- `iap_get_subscription_status(product_id, callback)` returns `{"isActive":true,"productId":"...","expiresAt":...,"willRenew":true}` (`expiresAt` in Unix milliseconds; `expiresAt` and `willRenew` only when known).
+- `iap_cancel_subscription(product_id, callback)` calls back with `(self, success, cancelled)`: `cancelled` is a boolean on success, the error JSON on failure.
+- `iap_claim_retention_offer(product_id, callback)` claims the subscription's retention offer and returns the updated subscription JSON.
+- In the editor, the mock offers `yes2.mock.premium.monthly` and keeps subscription state for the session; `mock_subscribe_result` selects the checkout outcome (see [Editor Testing](#editor-testing)).
+
 ### Leaderboard
 
 ```lua
@@ -630,7 +673,7 @@ The native extension is HTML5-only. In the Defold editor, `yes2sdk.*` calls run 
 
 - `initialize` / `start_game` succeed on the next frame
 - **Ads play a timed mock flow** (3s interstitial, 5s rewarded) and then fire the full callback sequence, so pause-resume wiring in `before_ad` / `after_ad` and the reward path in `ad_viewed` are exercised like a real ad
-- **IAP works end to end**: `iap_is_supported()` returns true, `iap_get_catalog` returns a sample catalog, `iap_purchase` accepts any product id and resolves with a realistic purchase payload, and `iap_get_purchases` / `iap_consume_purchase` operate on a session purchase list
+- **IAP works end to end**: `iap_is_supported()` returns true, `iap_get_catalog` returns a sample catalog, `iap_purchase` accepts any product id and resolves with a realistic purchase payload, and `iap_get_purchases` / `iap_consume_purchase` operate on a session purchase list. Mock purchases carry `"isSandbox":true`. Subscriptions are mocked too: a sample `yes2.mock.premium.monthly` offer, subscribe / cancel / retention offer / status on session state
 - Other modules keep the one-time-warning stub with sensible defaults
 
 Configure the mock in `game.project` (all keys optional):
@@ -641,6 +684,7 @@ mock = 0
 mock_rewarded_result = dismissed
 mock_ad_result = nofill
 mock_purchase_result = fail
+mock_subscribe_result = cancelled
 mock_entry_point_data = {"invite":"friend1"}
 ```
 
@@ -649,6 +693,7 @@ mock_entry_point_data = {"invite":"friend1"}
 - `mock_ad_result = nofill` makes ad calls fail with `no_fill`. Default: `normal`.
 - `mock_entry_point_data` is a JSON object string returned by `session_get_entry_point_data()`. Default: `{}`.
 - `mock_purchase_result = fail` makes `iap_purchase` fail with an `IAP_PURCHASE_FAILED` error (see [Errors](#errors)). Default: `success`.
+- `mock_subscribe_result = cancelled` makes `iap_subscribe` report `{"status":"cancelled"}`; `fail` makes it fail with an `IAP_PURCHASE_FAILED` error. Default: `subscribed`.
 
 The mock is editor/desktop only. HTML5 bundles always use the real platform SDK, and a missing extension in an HTML5 build still prints the loud bundling warning. For richer simulation (specific locales, network conditions), use the QA Inspector in the Yes2Games Dashboard.
 

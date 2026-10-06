@@ -52,6 +52,55 @@ var Yes2SDKIapLib = {
             }
         } catch (e) {}
         return 0;
+    },
+
+    // Subscriptions. Results are the JSON of what the SDK resolved; a runtime
+    // without the method fails with FEATURE_NOT_SUPPORTED through run.
+
+    Yes2SDK_iap_getSubscriptions: function (requestId, callback) {
+        Yes2SDKBridge.run(callback, requestId, 'iap.getSubscriptionsAsync', null, function (result) {
+            return JSON.stringify(result || []);
+        });
+    },
+
+    Yes2SDK_iap_subscribe: function (productIdPtr, requestId, callback) {
+        var productId = UTF8ToString(productIdPtr);
+        Yes2SDKBridge.run(callback, requestId, 'iap.subscribeAsync', function () {
+            return [productId];
+        });
+    },
+
+    Yes2SDK_iap_cancelSubscription: function (productIdPtr, requestId, callback) {
+        var productId = UTF8ToString(productIdPtr);
+        // Resolves a boolean: pass "true" or "false", the Lua wrapper turns it back into one.
+        Yes2SDKBridge.run(callback, requestId, 'iap.cancelSubscriptionAsync', function () {
+            return [productId];
+        }, function (result) {
+            return result ? 'true' : 'false';
+        });
+    },
+
+    Yes2SDK_iap_claimRetentionOffer: function (productIdPtr, requestId, callback) {
+        var productId = UTF8ToString(productIdPtr);
+        Yes2SDKBridge.run(callback, requestId, 'iap.claimRetentionOfferAsync', function () {
+            return [productId];
+        });
+    },
+
+    Yes2SDK_iap_getSubscriptionStatus: function (productIdPtr, requestId, callback) {
+        var productId = UTF8ToString(productIdPtr);
+        Yes2SDKBridge.run(callback, requestId, 'iap.getSubscriptionStatusAsync', function () {
+            return [productId];
+        });
+    },
+
+    Yes2SDK_iap_isSubscriptionSupported: function () {
+        try {
+            if (window.Yes2SDK && window.Yes2SDK.iap && typeof window.Yes2SDK.iap.isSubscriptionSupported === 'function') {
+                return window.Yes2SDK.iap.isSubscriptionSupported() ? 1 : 0;
+            }
+        } catch (e) {}
+        return 0;
     }
 }
 
