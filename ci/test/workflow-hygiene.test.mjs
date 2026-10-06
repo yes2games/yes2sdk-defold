@@ -189,6 +189,7 @@ test("the final gate is non-matrix, always(), and needs every mandatory result",
         "dependency-archive",
         "ci-tests",
         "web-js-syntax",
+        "lua-tests",
         "bob",
     ];
     assert.deepEqual(needed.sort(), mandatory.sort());
@@ -198,4 +199,14 @@ test("the final gate is non-matrix, always(), and needs every mandatory result",
     for (const id of needed) {
         assert.ok(jobs.has(id), `the final gate needs "${id}", which is not a job`);
     }
+});
+
+test("the Lua wrapper suite runs on Lua 5.1 in its own required job", () => {
+    const job = jobBlocks(source(".github/workflows/required-ci.yml")).get("lua-tests");
+    assert.ok(job !== undefined, "required-ci.yml has no lua-tests job");
+    assert.match(job, /runs-on: ubuntu-24\.04/);
+    assert.match(job, /apt-get install -y lua5\.1/);
+    assert.match(job, /run: lua5\.1 ci\/test\/lua\/run\.lua/);
+    // The job runs the suite directly: no continue-on-error or condition may let it skip.
+    assert.doesNotMatch(job, /continue-on-error|^\s{4}if:/m);
 });
