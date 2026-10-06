@@ -41,6 +41,14 @@ if not sdk then
   function sdk.config_is_supported() warn() return false end
   function sdk.review_is_supported() warn() return false end
   function sdk.iap_is_supported() warn() return false end
+  function sdk.context_is_supported() warn() return false end
+  function sdk.context_share(options_json, callback)
+    warn()
+    if callback then
+      local err = '{"code":"NOT_INITIALIZED","message":"SDK extension not loaded","context":"context.shareAsync"}'
+      timer.delay(0, false, function(tself) callback(tself, false, err) end)
+    end
+  end
   -- Notifications: unsupported, and the async calls fail instead of going silent.
   local function stub_fail(callback)
     warn()
@@ -313,6 +321,14 @@ if not sdk then
     end
     function sdk.notifications_cancel_all(callback)
       print("[Yes2SDK] Mock: notifications_cancel_all succeeded")
+      if callback then next_frame(function(tself) callback(tself, true, nil) end) end
+    end
+
+    -- Context: image share succeeds on the next frame and prints the share.
+    function sdk.context_is_supported() return true end
+
+    function sdk.context_share(options_json, callback)
+      print("[Yes2SDK] Mock: context_share succeeded (options: " .. tostring(options_json) .. ")")
       if callback then next_frame(function(tself) callback(tself, true, nil) end) end
     end
   end
@@ -1337,6 +1353,41 @@ end
 --- Check whether in-app purchases are supported on the current platform.
 function M.iap_is_supported()
   return sdk.iap_is_supported()
+end
+
+
+-- ── Context (image share) ──
+
+--- Share a message with an optional image through the platform's share flow.
+-- @param options Table or JSON string: { intent = "SHARE" (default) | "INVITE" | "REQUEST" |
+--   "CHALLENGE", image = string, text = string, data = table }. `image` is a URL on most
+--   platforms; some require a base64 PNG or a "data:image/png;base64,..." URL, so prefer the
+--   data URL. Pass nil for a plain share.
+-- Callback signature: function(self, success, err) where err is nil on success.
+-- Fields a platform does not use are ignored. Do not gate this call on context_is_supported(),
+-- which can be false where sharing works: call it and handle the failure (see M.parse_error);
+-- FEATURE_NOT_SUPPORTED means the platform has no share. The callback is optional.
+function M.context_share(options, callback)
+  if callback == nil then callback = function() end end
+  local to_encode = options
+  if type(options) == "table" then
+    to_encode = {}
+    for k, v in pairs(options) do to_encode[k] = v end
+    if to_encode.intent == nil then to_encode.intent = "SHARE" end
+  elseif options == nil then
+    to_encode = { intent = "SHARE" }
+  end
+  local encoded, err = encode_options(to_encode, "context.shareAsync")
+  if err then
+    fail_async(callback, err)
+    return
+  end
+  sdk.context_share(encoded or "", callback)
+end
+
+--- Hint only: can be false on platforms where sharing works. Do not gate context_share on it.
+function M.context_is_supported()
+  return sdk.context_is_supported()
 end
 
 -- ── Notifications ──

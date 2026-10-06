@@ -16,6 +16,7 @@
 #include "yes2sdk_iap.h"
 #include "yes2sdk_referrals.h"
 #include "yes2sdk_notifications.h"
+#include "yes2sdk_context.h"
 #include "yes2sdk_requests.h"
 #include "luautils.h"
 #include <dmsdk/sdk.h>
@@ -383,6 +384,9 @@ static const luaL_reg Module_methods[] = {
     {"notifications_cancel", Yes2SDKNotifications::Cancel},
     {"notifications_cancel_all", Yes2SDKNotifications::CancelAll},
     {"notifications_is_supported", Yes2SDKNotifications::IsSupported},
+    // Context (image share)
+    {"context_share", Yes2SDKContext::Share},
+    {"context_is_supported", Yes2SDKContext::IsSupported},
 
     {0, 0}
 };
