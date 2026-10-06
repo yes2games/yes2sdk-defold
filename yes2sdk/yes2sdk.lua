@@ -5,6 +5,22 @@
 -- iap_purchase, iap_consume_purchase, iap_subscribe and ads_show_* reject a second call while one is open;
 -- initialize and start_game are once per session.
 
+-- Fail an async call of the warn stub (extension not loaded): the callback gets
+-- NOT_INITIALIZED on the next frame, never synchronously. `context` names the SDK
+-- call as "<module>.<method>". Last resort: if no timer can be created
+-- (timer.delay raises, or returns timer.INVALID_TIMER_HANDLE), the callback runs
+-- synchronously with a nil self rather than never being delivered.
+local function not_loaded_async(callback, context)
+  if not callback then return end
+  local err = json.encode({
+    code = "NOT_INITIALIZED",
+    message = "Yes2SDK extension not loaded",
+    context = context,
+  })
+  local ok, handle = pcall(timer.delay, 0, false, function(tself) callback(tself, false, err) end)
+  if not ok or handle == timer.INVALID_TIMER_HANDLE then callback(nil, false, err) end
+end
+
 -- Guard: if the native extension isn't loaded (Project > Build instead of Bundle),
 -- create a stub that logs a warning and no-ops all SDK calls.
 local sdk = yes2sdk
@@ -21,6 +37,12 @@ if not sdk then
       return function() warn() end
     end
   })
+  -- Async calls that must not leave the caller waiting: warn, then fail the
+  -- callback next frame with NOT_INITIALIZED.
+  local function stub_fail(callback, context)
+    warn()
+    not_loaded_async(callback, context)
+  end
   -- Override functions that return values with sensible defaults
   function sdk.get_platform() warn() return "editor" end
   function sdk.session_get_locale() warn() return "en" end
@@ -42,43 +64,23 @@ if not sdk then
   function sdk.review_is_supported() warn() return false end
   function sdk.iap_is_supported() warn() return false end
   function sdk.context_is_supported() warn() return false end
-  function sdk.context_share(options_json, callback)
-    warn()
-    if callback then
-      local err = '{"code":"NOT_INITIALIZED","message":"SDK extension not loaded","context":"context.shareAsync"}'
-      timer.delay(0, false, function(tself) callback(tself, false, err) end)
-    end
-  end
+  function sdk.context_share(options_json, callback) stub_fail(callback, "context.shareAsync") end
   -- Notifications: unsupported, and the async calls fail instead of going silent.
-  local function stub_fail(callback)
-    warn()
-    if not callback then return end
-    local err = '{"code":"NOT_INITIALIZED","message":"Yes2SDK extension not loaded","context":"notifications"}'
-    local ok, handle = pcall(timer.delay, 0, false, function(tself) callback(tself, false, err) end)
-    if not ok or handle == timer.INVALID_TIMER_HANDLE then callback(nil, false, err) end
-  end
   function sdk.notifications_is_supported() warn() return false end
-  function sdk.notifications_schedule(options, callback) stub_fail(callback) end
-  function sdk.notifications_cancel(id, callback) stub_fail(callback) end
-  function sdk.notifications_cancel_all(callback) stub_fail(callback) end
-  -- IAP subscriptions: unsupported, and every async call fails on the next frame
-  -- with NOT_INITIALIZED so callers waiting on a callback are not left hanging.
+  function sdk.notifications_schedule(options, callback) stub_fail(callback, "notifications.scheduleAsync") end
+  function sdk.notifications_cancel(id, callback) stub_fail(callback, "notifications.cancelAsync") end
+  function sdk.notifications_cancel_all(callback) stub_fail(callback, "notifications.cancelAllAsync") end
+  -- IAP subscriptions: unsupported, and every async call fails.
   function sdk.iap_is_subscription_supported() warn() return false end
-  local function subscription_stub_fail(name, callback)
-    warn()
-    if not callback then return end
-    local err = json.encode({
-      code = "NOT_INITIALIZED",
-      message = "Yes2SDK extension not loaded",
-      context = name,
-    })
-    timer.delay(0, false, function(tself) callback(tself, false, err) end)
-  end
-  function sdk.iap_get_subscriptions(callback) subscription_stub_fail("iap_get_subscriptions", callback) end
-  function sdk.iap_subscribe(product_id, callback) subscription_stub_fail("iap_subscribe", callback) end
-  function sdk.iap_cancel_subscription(product_id, callback) subscription_stub_fail("iap_cancel_subscription", callback) end
-  function sdk.iap_claim_retention_offer(product_id, callback) subscription_stub_fail("iap_claim_retention_offer", callback) end
-  function sdk.iap_get_subscription_status(product_id, callback) subscription_stub_fail("iap_get_subscription_status", callback) end
+  function sdk.iap_get_subscriptions(callback) stub_fail(callback, "iap.getSubscriptionsAsync") end
+  function sdk.iap_subscribe(product_id, callback) stub_fail(callback, "iap.subscribeAsync") end
+  function sdk.iap_cancel_subscription(product_id, callback) stub_fail(callback, "iap.cancelSubscriptionAsync") end
+  function sdk.iap_claim_retention_offer(product_id, callback) stub_fail(callback, "iap.claimRetentionOfferAsync") end
+  function sdk.iap_get_subscription_status(product_id, callback) stub_fail(callback, "iap.getSubscriptionStatusAsync") end
+  -- Confirmed writes: they cannot reach a platform, so the callback fails.
+  function sdk.data_set_string_async(key, value, callback) stub_fail(callback, "data.setStringAsync") end
+  function sdk.data_flush(callback) stub_fail(callback, "data.flushAsync") end
+  function sdk.player_flush_data(callback) stub_fail(callback, "player.flushDataAsync") end
   function sdk.ads_is_rewarded_ad_available() warn() return false end
   function sdk.ads_is_interstitial_supported() warn() return false end
   function sdk.ads_is_rewarded_supported() warn() return false end
@@ -91,17 +93,10 @@ if not sdk then
   function sdk.auth_registration_prompt_login() warn() return false end
   function sdk.auth_registration_prompt_close() warn() return false end
 
-  -- Referrals: unsupported, and async calls fail on the next frame like a missing SDK.
+  -- Referrals: unsupported, and async calls fail.
   function sdk.referrals_is_supported() warn() return false end
-  local function referrals_not_initialized(callback, context)
-    warn()
-    if not callback then return end
-    local err = json.encode({ code = "NOT_INITIALIZED", message = "SDK not initialized", context = context })
-    local ok, handle = pcall(timer.delay, 0, false, function(tself) callback(tself, false, err) end)
-    if not ok or handle == timer.INVALID_TIMER_HANDLE then callback(nil, false, err) end
-  end
-  function sdk.referrals_share(options_json, callback) referrals_not_initialized(callback, "referrals.shareAsync") end
-  function sdk.referrals_list(callback) referrals_not_initialized(callback, "referrals.listAsync") end
+  function sdk.referrals_share(options_json, callback) stub_fail(callback, "referrals.shareAsync") end
+  function sdk.referrals_list(callback) stub_fail(callback, "referrals.listAsync") end
 
   -- ── Editor mock (desktop builds only) ──
   --
@@ -118,8 +113,9 @@ if not sdk then
   --   mock_rewarded_result = viewed   <- or: dismissed (no-reward path)
   --   mock_ad_result = normal         <- or: nofill (ads fail, no inventory)
   --   mock_purchase_result = success  <- or: fail
-  --   mock_referral_result = shared   <- or: canceled (referrals_share reports canceled)
+  --   mock_referral_result = shared   <- reports {"canceled":false}; or: canceled ({"canceled":true})
   --   mock_subscribe_result = subscribed  <- or: cancelled, fail
+  --   mock_entry_point_data = {}      <- JSON object string for session_get_entry_point_data()
   --
   -- HTML5 keeps the plain warn stub: a missing extension there is a bundling
   -- mistake the developer must see, not something to paper over.
@@ -1167,6 +1163,85 @@ function M.auth_is_supported()
   return sdk.auth_is_supported()
 end
 
+-- ── Registration prompt ──
+
+local _PROMPT_CONTEXT = "auth.showRegistrationPrompt"
+
+--- Ask a guest to register, with your own prompt UI.
+-- On platforms that support it, this opens the platform's minimal registration
+-- overlay and returns a handle whose functions you wire to your own buttons:
+-- handle.login() starts the platform login flow (the handle stays open) and
+-- handle.close() closes the prompt (the handle is freed). Both return true when
+-- the handle was still open, false otherwise.
+--
+-- options (table or JSON string, all optional):
+--   theme    "light" or "dark"
+--   message  text the player's messaging app is pre-filled with. It must not be
+--            empty or whitespace only, be at most 140 characters (the
+--            placeholder counts as written, an emoji counts as 2), contain
+--            {{registrationCode}} exactly once and no other {{...}}
+--            placeholder, and keep the code apart from neighbouring letters,
+--            digits or underscores with a space or punctuation.
+--   data     table, available from session_get_entry_point_data() after the
+--            player registers
+--   on_close function(self) called once when the prompt closes, by close() or
+--            by the platform's own close button. It runs after the call returns,
+--            never inside close() or this call, and never after an error return
+--
+-- Guests only: check auth_is_authenticated() first, a registered player gets an
+-- INVALID_OPERATION error. Save the player's progress before showing it. For a
+-- custom prompt the platform's own login reminders must be turned off for the
+-- game; that is a per-game platform setting, not an SDK call.
+--
+-- Returns handle, or nil and an error JSON string (see M.parse_error): codes
+-- FEATURE_NOT_SUPPORTED, INVALID_OPERATION, INVALID_PARAM (bad options or
+-- message), NOT_INITIALIZED. Synchronous: nothing is called back on failure.
+function M.auth_show_registration_prompt(options)
+  local on_close
+  local rest = options
+  if type(options) == "table" then
+    on_close = options.on_close
+    if on_close ~= nil and type(on_close) ~= "function" then
+      return nil, invalid_param("on_close must be a function, got " .. type(on_close), _PROMPT_CONTEXT)
+    end
+    rest = {}
+    for k, v in pairs(options) do
+      if k ~= "on_close" then rest[k] = v end
+    end
+  end
+  local encoded, err = encode_options(rest, _PROMPT_CONTEXT)
+  if err then return nil, err end
+
+  local raw = sdk.auth_show_registration_prompt(encoded, function(self)
+    if on_close then on_close(self) end
+  end)
+  local decoded
+  if type(raw) == "string" then
+    local ok, value = pcall(json.decode, raw)
+    if ok and type(value) == "table" then decoded = value end
+  end
+  if decoded and type(decoded.handle) == "number" then
+    local id = decoded.handle
+    return {
+      login = function() return sdk.auth_registration_prompt_login(id) == true end,
+      close = function() return sdk.auth_registration_prompt_close(id) == true end,
+    }
+  end
+  local e = decoded and decoded.error
+  if type(e) == "table" then
+    return nil, json.encode({
+      code = _error_field(e, "code") or "UNKNOWN_ERROR",
+      message = _error_field(e, "message") or "",
+      context = _error_field(e, "context") or _PROMPT_CONTEXT,
+    })
+  end
+  return nil, json.encode({
+    code = "UNKNOWN_ERROR",
+    message = "unexpected result: " .. tostring(raw),
+    context = _PROMPT_CONTEXT,
+  })
+end
+
 -- ── Data (key-value storage) ──
 
 function M.data_get_int(key, default)
@@ -1308,85 +1383,6 @@ end
 -- string of the player's resulting LeaderboardEntry.
 function M.leaderboard_set_score(name, score, metadata, callback)
   sdk.leaderboard_set_score(name, score, metadata, callback)
-end
-
--- ── Registration prompt ──
-
-local _PROMPT_CONTEXT = "auth.showRegistrationPrompt"
-
---- Ask a guest to register, with your own prompt UI.
--- On platforms that support it, this opens the platform's minimal registration
--- overlay and returns a handle whose functions you wire to your own buttons:
--- handle.login() starts the platform login flow (the handle stays open) and
--- handle.close() closes the prompt (the handle is freed). Both return true when
--- the handle was still open, false otherwise.
---
--- options (table or JSON string, all optional):
---   theme    "light" or "dark"
---   message  text the player's messaging app is pre-filled with. It must not be
---            empty or whitespace only, be at most 140 characters (the
---            placeholder counts as written, an emoji counts as 2), contain
---            {{registrationCode}} exactly once and no other {{...}}
---            placeholder, and keep the code apart from neighbouring letters,
---            digits or underscores with a space or punctuation.
---   data     table, available from session_get_entry_point_data() after the
---            player registers
---   on_close function(self) called once when the prompt closes, by close() or
---            by the platform's own close button. It runs after the call returns,
---            never inside close() or this call, and never after an error return
---
--- Guests only: check auth_is_authenticated() first, a registered player gets an
--- INVALID_OPERATION error. Save the player's progress before showing it. For a
--- custom prompt the platform's own login reminders must be turned off for the
--- game; that is a per-game platform setting, not an SDK call.
---
--- Returns handle, or nil and an error JSON string (see M.parse_error): codes
--- FEATURE_NOT_SUPPORTED, INVALID_OPERATION, INVALID_PARAM (bad options or
--- message), NOT_INITIALIZED. Synchronous: nothing is called back on failure.
-function M.auth_show_registration_prompt(options)
-  local on_close
-  local rest = options
-  if type(options) == "table" then
-    on_close = options.on_close
-    if on_close ~= nil and type(on_close) ~= "function" then
-      return nil, invalid_param("on_close must be a function, got " .. type(on_close), _PROMPT_CONTEXT)
-    end
-    rest = {}
-    for k, v in pairs(options) do
-      if k ~= "on_close" then rest[k] = v end
-    end
-  end
-  local encoded, err = encode_options(rest, _PROMPT_CONTEXT)
-  if err then return nil, err end
-
-  local raw = sdk.auth_show_registration_prompt(encoded, function(self)
-    if on_close then on_close(self) end
-  end)
-  local decoded
-  if type(raw) == "string" then
-    local ok, value = pcall(json.decode, raw)
-    if ok and type(value) == "table" then decoded = value end
-  end
-  if decoded and type(decoded.handle) == "number" then
-    local id = decoded.handle
-    return {
-      login = function() return sdk.auth_registration_prompt_login(id) == true end,
-      close = function() return sdk.auth_registration_prompt_close(id) == true end,
-    }
-  end
-  local e = decoded and decoded.error
-  if type(e) == "table" then
-    return nil, json.encode({
-      code = _error_field(e, "code") or "UNKNOWN_ERROR",
-      message = _error_field(e, "message") or "",
-      context = _error_field(e, "context") or _PROMPT_CONTEXT,
-    })
-  end
-  return nil, json.encode({
-    code = "UNKNOWN_ERROR",
-    message = "unexpected result: " .. tostring(raw),
-    context = _PROMPT_CONTEXT,
-  })
 end
 
 --- Get leaderboard entries with pagination.
@@ -1681,33 +1677,6 @@ function M.session_get_entry_point_data()
 end
 
 -- ── Confirmed writes ──
-
--- Without the extension and without the editor mock the confirmed writes cannot
--- reach a platform: the callback still fires, next frame, with NOT_INITIALIZED.
-if not yes2sdk then
-  local function not_loaded(context)
-    return json.encode({
-      code = "NOT_INITIALIZED",
-      message = "Yes2SDK extension not loaded",
-      context = context,
-    })
-  end
-  if rawget(sdk, "data_set_string_async") == nil then
-    function sdk.data_set_string_async(key, value, callback)
-      fail_async(callback, not_loaded("data.setStringAsync"))
-    end
-  end
-  if rawget(sdk, "data_flush") == nil then
-    function sdk.data_flush(callback)
-      fail_async(callback, not_loaded("data.flushAsync"))
-    end
-  end
-  if rawget(sdk, "player_flush_data") == nil then
-    function sdk.player_flush_data(callback)
-      fail_async(callback, not_loaded("player.flushDataAsync"))
-    end
-  end
-end
 
 --- Store a string and learn whether the platform confirmed it.
 -- data_set_string is fire and forget. Use this (or data_flush) before something
