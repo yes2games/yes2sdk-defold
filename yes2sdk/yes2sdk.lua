@@ -309,32 +309,42 @@ end
 
 -- Turn an options argument into the JSON string the native layer takes.
 -- table -> json.encode (an empty table gives nil); string -> as is (empty gives
--- nil); nil -> nil. Anything else returns nil, err_json (code INVALID_PARAM).
-local function encode_options(v)
+-- nil); nil -> nil. Anything else, or a table json.encode cannot handle (a
+-- function value, a cycle), returns nil, err_json (code INVALID_PARAM).
+-- `context` is optional and lands in the error JSON, e.g. "session.start".
+-- Only a top-level empty table becomes nil; a nested empty table is encoded
+-- as is and may come out as [] rather than {} (empty tables carry no type).
+local function encode_options(v, context)
   local kind = type(v)
   if kind == "nil" then return nil end
   if kind == "table" then
     if next(v) == nil then return nil end
-    return json.encode(v)
+    local ok, encoded = pcall(json.encode, v)
+    if not ok then
+      return nil, invalid_param("options could not be encoded as JSON: " .. tostring(encoded), context)
+    end
+    return encoded
   end
   if kind == "string" then
     if v == "" then return nil end
     return v
   end
-  return nil, invalid_param("options must be a table or a JSON string, got " .. kind)
+  return nil, invalid_param("options must be a table or a JSON string, got " .. kind, context)
 end
 
 -- Deliver callback(self, false, err_json) on the next frame. Async APIs never
 -- call back synchronously on a validation failure. The timer is created in the
 -- calling script's context, so the callback receives the right self.
+-- Last resort: if no timer can be created (timer.delay raises, or returns
+-- timer.INVALID_TIMER_HANDLE), the callback runs synchronously with a nil self
+-- rather than never being delivered.
 local function fail_async(callback, err_json)
   if not callback then return end
-  local ok = pcall(timer.delay, 0, false, function(tself) callback(tself, false, err_json) end)
-  if not ok then callback(nil, false, err_json) end
+  local ok, handle = pcall(timer.delay, 0, false, function(tself) callback(tself, false, err_json) end)
+  if not ok or handle == timer.INVALID_TIMER_HANDLE then
+    callback(nil, false, err_json)
+  end
 end
-
--- Test hook, not public API.
-M._internal = { encode_options = encode_options, fail_async = fail_async, invalid_param = invalid_param }
 
 -- ── Core (mandatory) ──
 
