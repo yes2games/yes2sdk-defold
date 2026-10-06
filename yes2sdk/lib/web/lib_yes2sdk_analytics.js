@@ -33,7 +33,7 @@ var Yes2SDKAnalyticsLib = {
 
     Yes2SDK_analytics_logGameChoice: function (decisionPtr, choicePtr) {
         if (window.Yes2SDK && window.Yes2SDK.analytics) {
-            window.Yes2SDK.analytics.logEvent("game_choice", {
+            window.Yes2SDK.analytics.logEvent("game_choice", undefined, {
                 decision: UTF8ToString(decisionPtr),
                 choice: UTF8ToString(choicePtr)
             });
