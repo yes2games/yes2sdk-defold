@@ -107,6 +107,13 @@ var Yes2SDKPlayerLib = {
         });
     },
 
+    Yes2SDK_player_flushData: function (requestId, callback) {
+        // flushDataAsync resolves void: success with no payload.
+        Yes2SDKBridge.run(callback, requestId, 'player.flushDataAsync', null, function () {
+            return null;
+        });
+    },
+
     Yes2SDK_player_getUniqueId: function (requestId, callback) {
         Yes2SDKBridge.run(callback, requestId, 'player.getUniqueId', null, function (id) {
             return String(id == null ? "" : id);

@@ -313,6 +313,11 @@ static const luaL_reg Module_methods[] = {
     {"data_delete_key", Yes2SDKData::DeleteKey},
     {"data_delete_all", Yes2SDKData::DeleteAll},
 
+    // Confirmed writes and flush
+    {"data_set_string_async", Yes2SDKData::SetStringAsync},
+    {"data_flush", Yes2SDKData::Flush},
+    {"player_flush_data", Yes2SDKPlayer::FlushData},
+
     // Game
     {"game_happy_time", Yes2SDKGame::HappyTime},
     {"game_get_settings", Yes2SDKGame::GetSettings},

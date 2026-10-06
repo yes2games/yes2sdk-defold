@@ -81,8 +81,36 @@ var Yes2SDKDataLib = {
                 window.Yes2SDK.data.deleteAll();
             }
         } catch (e) {}
+    },
+
+    // Confirmed writes: each call carries the request id minted in C++ and completes
+    // through $Yes2SDKBridge. The platform resolves true once the write is stored; a
+    // resolved false means it did not confirm, which is reported as a failure.
+    // Strings are read before the call returns: the pointers are only valid until then.
+
+    Yes2SDK_data_setStringAsync: function (keyPtr, valuePtr, requestId, callback) {
+        var key = UTF8ToString(keyPtr);
+        var value = UTF8ToString(valuePtr);
+        Yes2SDKBridge.run(callback, requestId, 'data.setStringAsync', function () {
+            return [key, value];
+        }, function (confirmed) {
+            if (confirmed !== true) {
+                throw { code: 'UNKNOWN_ERROR', message: 'The platform did not confirm the write', context: 'data.setStringAsync' };
+            }
+            return null;
+        });
+    },
+
+    Yes2SDK_data_flush: function (requestId, callback) {
+        Yes2SDKBridge.run(callback, requestId, 'data.flushAsync', null, function (confirmed) {
+            if (confirmed !== true) {
+                throw { code: 'UNKNOWN_ERROR', message: 'The platform did not confirm the flush', context: 'data.flushAsync' };
+            }
+            return null;
+        });
     }
 }
 
 autoAddDeps(Yes2SDKDataLib, '$Yes2SDKDataUtils');
+autoAddDeps(Yes2SDKDataLib, '$Yes2SDKBridge');
 addToLibrary(Yes2SDKDataLib);
