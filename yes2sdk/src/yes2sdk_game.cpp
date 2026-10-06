@@ -12,7 +12,7 @@ void Yes2SDKGame::OnInviteLink(const int success, const char* result) {
     lua_pushboolean(L, success);
     if (result) { lua_pushstring(L, result); } else { lua_pushnil(L); }
     int ret = lua_pcall(L, 3, 0, 0);
-    if (ret != 0) { lua_pop(L, 1); }
+    if (ret != 0) { lua_logpcallerror(L, "game invite_link"); }
     assert(top == lua_gettop(L));
 }
 int Yes2SDKGame::HappyTime(lua_State* L) {
@@ -43,7 +43,7 @@ void Yes2SDKGame::OnGetServerTime(const int success, const char* result) {
     lua_pushboolean(L, success);
     if (result) { lua_pushstring(L, result); } else { lua_pushnil(L); }
     int ret = lua_pcall(L, 3, 0, 0);
-    if (ret != 0) { lua_pop(L, 1); }
+    if (ret != 0) { lua_logpcallerror(L, "game get_server_time"); }
     assert(top == lua_gettop(L));
 }
 int Yes2SDKGame::GetServerTime(lua_State* L) {

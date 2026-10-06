@@ -15,7 +15,7 @@ void Yes2SDKIap::OnGetCatalog(const int success, const char* result) {
     lua_pushboolean(L, success);
     if (result) { lua_pushstring(L, result); } else { lua_pushnil(L); }
     int ret = lua_pcall(L, 3, 0, 0);
-    if (ret != 0) { lua_pop(L, 1); }
+    if (ret != 0) { lua_logpcallerror(L, "iap get_catalog"); }
     assert(top == lua_gettop(L));
 }
 void Yes2SDKIap::OnGetProduct(const int success, const char* result) {
@@ -26,7 +26,7 @@ void Yes2SDKIap::OnGetProduct(const int success, const char* result) {
     lua_pushboolean(L, success);
     if (result) { lua_pushstring(L, result); } else { lua_pushnil(L); }
     int ret = lua_pcall(L, 3, 0, 0);
-    if (ret != 0) { lua_pop(L, 1); }
+    if (ret != 0) { lua_logpcallerror(L, "iap get_product"); }
     assert(top == lua_gettop(L));
 }
 void Yes2SDKIap::OnPurchase(const int success, const char* result) {
@@ -37,7 +37,7 @@ void Yes2SDKIap::OnPurchase(const int success, const char* result) {
     lua_pushboolean(L, success);
     if (result) { lua_pushstring(L, result); } else { lua_pushnil(L); }
     int ret = lua_pcall(L, 3, 0, 0);
-    if (ret != 0) { lua_pop(L, 1); }
+    if (ret != 0) { lua_logpcallerror(L, "iap purchase"); }
     assert(top == lua_gettop(L));
 }
 void Yes2SDKIap::OnGetPurchases(const int success, const char* result) {
@@ -48,7 +48,7 @@ void Yes2SDKIap::OnGetPurchases(const int success, const char* result) {
     lua_pushboolean(L, success);
     if (result) { lua_pushstring(L, result); } else { lua_pushnil(L); }
     int ret = lua_pcall(L, 3, 0, 0);
-    if (ret != 0) { lua_pop(L, 1); }
+    if (ret != 0) { lua_logpcallerror(L, "iap get_purchases"); }
     assert(top == lua_gettop(L));
 }
 void Yes2SDKIap::OnConsumePurchase(const int success, const char* result) {
@@ -59,7 +59,7 @@ void Yes2SDKIap::OnConsumePurchase(const int success, const char* result) {
     lua_pushboolean(L, success);
     if (result) { lua_pushstring(L, result); } else { lua_pushnil(L); }
     int ret = lua_pcall(L, 3, 0, 0);
-    if (ret != 0) { lua_pop(L, 1); }
+    if (ret != 0) { lua_logpcallerror(L, "iap consume_purchase"); }
     assert(top == lua_gettop(L));
 }
 int Yes2SDKIap::GetCatalog(lua_State* L) {

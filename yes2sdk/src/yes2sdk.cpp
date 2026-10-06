@@ -46,10 +46,7 @@ void Yes2SDK::OnInitialize(const int success, const char *error)
     if (error) { lua_pushstring(L, error); } else { lua_pushnil(L); }
 
     int ret = lua_pcall(L, 3, 0, 0);
-    if (ret != 0)
-    {
-        lua_pop(L, 1);
-    }
+    if (ret != 0) { lua_logpcallerror(L, "initialize"); }
 
     assert(top == lua_gettop(L));
 }
@@ -65,10 +62,7 @@ void Yes2SDK::OnStartGame(const int success, const char *error)
     if (error) { lua_pushstring(L, error); } else { lua_pushnil(L); }
 
     int ret = lua_pcall(L, 3, 0, 0);
-    if (ret != 0)
-    {
-        lua_pop(L, 1);
-    }
+    if (ret != 0) { lua_logpcallerror(L, "start_game"); }
 
     assert(top == lua_gettop(L));
 }
@@ -126,10 +120,7 @@ void Yes2SDK::OnPauseFromJs()
 
     lua_pushlistener(L, onPauseListener);
     int ret = lua_pcall(L, 1, 0, 0);
-    if (ret != 0)
-    {
-        lua_pop(L, 1);
-    }
+    if (ret != 0) { lua_logpcallerror(L, "on_pause"); }
 
     assert(top == lua_gettop(L));
 }
@@ -142,10 +133,7 @@ void Yes2SDK::OnResumeFromJs()
 
     lua_pushlistener(L, onResumeListener);
     int ret = lua_pcall(L, 1, 0, 0);
-    if (ret != 0)
-    {
-        lua_pop(L, 1);
-    }
+    if (ret != 0) { lua_logpcallerror(L, "on_resume"); }
 
     assert(top == lua_gettop(L));
 }
@@ -159,10 +147,7 @@ void Yes2SDK::OnAudioEnabledChangeFromJs(const int enabled)
     lua_pushlistener(L, onAudioEnabledChangeListener);
     lua_pushboolean(L, enabled);
     int ret = lua_pcall(L, 2, 0, 0);
-    if (ret != 0)
-    {
-        lua_pop(L, 1);
-    }
+    if (ret != 0) { lua_logpcallerror(L, "on_audio_enabled_change"); }
 
     assert(top == lua_gettop(L));
 }
@@ -175,10 +160,7 @@ void Yes2SDK::OnAccountDialogOpenFromJs()
 
     lua_pushlistener(L, onAccountDialogOpenListener);
     int ret = lua_pcall(L, 1, 0, 0);
-    if (ret != 0)
-    {
-        lua_pop(L, 1);
-    }
+    if (ret != 0) { lua_logpcallerror(L, "on_account_dialog_open"); }
 
     assert(top == lua_gettop(L));
 }
@@ -191,10 +173,7 @@ void Yes2SDK::OnAccountDialogCloseFromJs()
 
     lua_pushlistener(L, onAccountDialogCloseListener);
     int ret = lua_pcall(L, 1, 0, 0);
-    if (ret != 0)
-    {
-        lua_pop(L, 1);
-    }
+    if (ret != 0) { lua_logpcallerror(L, "on_account_dialog_close"); }
 
     assert(top == lua_gettop(L));
 }

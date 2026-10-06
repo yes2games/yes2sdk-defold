@@ -17,7 +17,7 @@ void Yes2SDKAds::OnBeforeAd(const int success, const char *detail)
     lua_pushlistener(L, onBeforeAdListener);
     lua_pushboolean(L, success);
     int ret = lua_pcall(L, 2, 0, 0);
-    if (ret != 0) { lua_pop(L, 1); }
+    if (ret != 0) { lua_logpcallerror(L, "ads before_ad"); }
     assert(top == lua_gettop(L));
 }
 
@@ -29,7 +29,7 @@ void Yes2SDKAds::OnAfterAd(const int success, const char *detail)
     lua_pushlistener(L, onAfterAdListener);
     lua_pushboolean(L, success);
     int ret = lua_pcall(L, 2, 0, 0);
-    if (ret != 0) { lua_pop(L, 1); }
+    if (ret != 0) { lua_logpcallerror(L, "ads after_ad"); }
     assert(top == lua_gettop(L));
 }
 
@@ -41,7 +41,7 @@ void Yes2SDKAds::OnAdDismissed(const int success, const char *detail)
     lua_pushlistener(L, onAdDismissedListener);
     lua_pushboolean(L, success);
     int ret = lua_pcall(L, 2, 0, 0);
-    if (ret != 0) { lua_pop(L, 1); }
+    if (ret != 0) { lua_logpcallerror(L, "ads ad_dismissed"); }
     assert(top == lua_gettop(L));
 }
 
@@ -53,7 +53,7 @@ void Yes2SDKAds::OnAdViewed(const int success, const char *detail)
     lua_pushlistener(L, onAdViewedListener);
     lua_pushboolean(L, success);
     int ret = lua_pcall(L, 2, 0, 0);
-    if (ret != 0) { lua_pop(L, 1); }
+    if (ret != 0) { lua_logpcallerror(L, "ads ad_viewed"); }
     assert(top == lua_gettop(L));
 }
 
@@ -65,7 +65,7 @@ void Yes2SDKAds::OnNoFill(const int success, const char *detail)
     lua_pushlistener(L, onNoFillListener);
     lua_pushboolean(L, success);
     int ret = lua_pcall(L, 2, 0, 0);
-    if (ret != 0) { lua_pop(L, 1); }
+    if (ret != 0) { lua_logpcallerror(L, "ads no_fill"); }
     assert(top == lua_gettop(L));
 }
 

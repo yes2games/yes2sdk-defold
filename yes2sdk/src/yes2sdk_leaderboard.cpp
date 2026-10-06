@@ -14,7 +14,7 @@ void Yes2SDKLeaderboard::OnGet(const int success, const char* result) {
     lua_pushboolean(L, success);
     if (result) { lua_pushstring(L, result); } else { lua_pushnil(L); }
     int ret = lua_pcall(L, 3, 0, 0);
-    if (ret != 0) { lua_pop(L, 1); }
+    if (ret != 0) { lua_logpcallerror(L, "leaderboard get"); }
     assert(top == lua_gettop(L));
 }
 void Yes2SDKLeaderboard::OnSetScore(const int success, const char* result) {
@@ -25,7 +25,7 @@ void Yes2SDKLeaderboard::OnSetScore(const int success, const char* result) {
     lua_pushboolean(L, success);
     if (result) { lua_pushstring(L, result); } else { lua_pushnil(L); }
     int ret = lua_pcall(L, 3, 0, 0);
-    if (ret != 0) { lua_pop(L, 1); }
+    if (ret != 0) { lua_logpcallerror(L, "leaderboard set_score"); }
     assert(top == lua_gettop(L));
 }
 void Yes2SDKLeaderboard::OnGetEntries(const int success, const char* result) {
@@ -36,7 +36,7 @@ void Yes2SDKLeaderboard::OnGetEntries(const int success, const char* result) {
     lua_pushboolean(L, success);
     if (result) { lua_pushstring(L, result); } else { lua_pushnil(L); }
     int ret = lua_pcall(L, 3, 0, 0);
-    if (ret != 0) { lua_pop(L, 1); }
+    if (ret != 0) { lua_logpcallerror(L, "leaderboard get_entries"); }
     assert(top == lua_gettop(L));
 }
 void Yes2SDKLeaderboard::OnGetPlayerEntry(const int success, const char* result) {
@@ -47,7 +47,7 @@ void Yes2SDKLeaderboard::OnGetPlayerEntry(const int success, const char* result)
     lua_pushboolean(L, success);
     if (result) { lua_pushstring(L, result); } else { lua_pushnil(L); }
     int ret = lua_pcall(L, 3, 0, 0);
-    if (ret != 0) { lua_pop(L, 1); }
+    if (ret != 0) { lua_logpcallerror(L, "leaderboard get_player_entry"); }
     assert(top == lua_gettop(L));
 }
 int Yes2SDKLeaderboard::Get(lua_State* L) {

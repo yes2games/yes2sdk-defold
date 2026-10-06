@@ -18,7 +18,7 @@ void Yes2SDKPlayer::OnGetData(const int success, const char* data) {
     lua_pushboolean(L, success);
     if (data) { lua_pushstring(L, data); } else { lua_pushnil(L); }
     int ret = lua_pcall(L, 3, 0, 0);
-    if (ret != 0) { lua_pop(L, 1); }
+    if (ret != 0) { lua_logpcallerror(L, "player get_data"); }
     assert(top == lua_gettop(L));
 }
 void Yes2SDKPlayer::OnSetData(const int success, const char* error) {
@@ -29,7 +29,7 @@ void Yes2SDKPlayer::OnSetData(const int success, const char* error) {
     lua_pushboolean(L, success);
     if (error) { lua_pushstring(L, error); } else { lua_pushnil(L); }
     int ret = lua_pcall(L, 3, 0, 0);
-    if (ret != 0) { lua_pop(L, 1); }
+    if (ret != 0) { lua_logpcallerror(L, "player set_data"); }
     assert(top == lua_gettop(L));
 }
 int Yes2SDKPlayer::GetName(lua_State* L) {
@@ -62,7 +62,7 @@ void Yes2SDKPlayer::OnGetUniqueId(const int success, const char* result) {
     lua_pushboolean(L, success);
     if (result) { lua_pushstring(L, result); } else { lua_pushnil(L); }
     int ret = lua_pcall(L, 3, 0, 0);
-    if (ret != 0) { lua_pop(L, 1); }
+    if (ret != 0) { lua_logpcallerror(L, "player get_unique_id"); }
     assert(top == lua_gettop(L));
 }
 void Yes2SDKPlayer::OnGetIdsPerGame(const int success, const char* result) {
@@ -73,7 +73,7 @@ void Yes2SDKPlayer::OnGetIdsPerGame(const int success, const char* result) {
     lua_pushboolean(L, success);
     if (result) { lua_pushstring(L, result); } else { lua_pushnil(L); }
     int ret = lua_pcall(L, 3, 0, 0);
-    if (ret != 0) { lua_pop(L, 1); }
+    if (ret != 0) { lua_logpcallerror(L, "player get_ids_per_game"); }
     assert(top == lua_gettop(L));
 }
 void Yes2SDKPlayer::OnGetPayingStatus(const int success, const char* result) {
@@ -84,7 +84,7 @@ void Yes2SDKPlayer::OnGetPayingStatus(const int success, const char* result) {
     lua_pushboolean(L, success);
     if (result) { lua_pushstring(L, result); } else { lua_pushnil(L); }
     int ret = lua_pcall(L, 3, 0, 0);
-    if (ret != 0) { lua_pop(L, 1); }
+    if (ret != 0) { lua_logpcallerror(L, "player get_paying_status"); }
     assert(top == lua_gettop(L));
 }
 void Yes2SDKPlayer::OnGetMode(const int success, const char* result) {
@@ -95,7 +95,7 @@ void Yes2SDKPlayer::OnGetMode(const int success, const char* result) {
     lua_pushboolean(L, success);
     if (result) { lua_pushstring(L, result); } else { lua_pushnil(L); }
     int ret = lua_pcall(L, 3, 0, 0);
-    if (ret != 0) { lua_pop(L, 1); }
+    if (ret != 0) { lua_logpcallerror(L, "player get_mode"); }
     assert(top == lua_gettop(L));
 }
 void Yes2SDKPlayer::OnGetPhoto(const int success, const char* result) {
@@ -106,7 +106,7 @@ void Yes2SDKPlayer::OnGetPhoto(const int success, const char* result) {
     lua_pushboolean(L, success);
     if (result) { lua_pushstring(L, result); } else { lua_pushnil(L); }
     int ret = lua_pcall(L, 3, 0, 0);
-    if (ret != 0) { lua_pop(L, 1); }
+    if (ret != 0) { lua_logpcallerror(L, "player get_photo"); }
     assert(top == lua_gettop(L));
 }
 int Yes2SDKPlayer::GetUniqueId(lua_State* L) {
@@ -143,7 +143,7 @@ void Yes2SDKPlayer::OnGetSignedInfo(const int success, const char* result) {
     lua_pushboolean(L, success);
     if (result) { lua_pushstring(L, result); } else { lua_pushnil(L); }
     int ret = lua_pcall(L, 3, 0, 0);
-    if (ret != 0) { lua_pop(L, 1); }
+    if (ret != 0) { lua_logpcallerror(L, "player get_signed_info"); }
     assert(top == lua_gettop(L));
 }
 int Yes2SDKPlayer::GetSignedInfo(lua_State* L) {
