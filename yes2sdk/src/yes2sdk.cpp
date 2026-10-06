@@ -305,6 +305,10 @@ static const luaL_reg Module_methods[] = {
     {"auth_is_authenticated", Yes2SDKAuth::IsAuthenticated},
     {"auth_sign_in", Yes2SDKAuth::SignIn},
     {"auth_is_supported", Yes2SDKAuth::IsSupported},
+    // Auth: game-drawn registration prompt
+    {"auth_show_registration_prompt", Yes2SDKAuth::ShowRegistrationPrompt},
+    {"auth_registration_prompt_login", Yes2SDKAuth::RegistrationPromptLogin},
+    {"auth_registration_prompt_close", Yes2SDKAuth::RegistrationPromptClose},
 
     // Data (key-value storage)
     {"data_get_int", Yes2SDKData::GetInt},

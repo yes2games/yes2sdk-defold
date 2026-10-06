@@ -86,6 +86,10 @@ if not sdk then
   function sdk.player_is_data_supported() warn() return false end
   function sdk.session_is_audio_enabled() warn() return true end
   function sdk.session_get_entry_point_data() warn() return "{}" end
+  -- Registration prompt: no extension, no prompt.
+  function sdk.auth_show_registration_prompt() warn() return '{"error":{"code":"FEATURE_NOT_SUPPORTED","message":"Registration prompt needs the native extension (HTML5 bundle)","context":"auth.showRegistrationPrompt"}}' end
+  function sdk.auth_registration_prompt_login() warn() return false end
+  function sdk.auth_registration_prompt_close() warn() return false end
 
   -- Referrals: unsupported, and async calls fail on the next frame like a missing SDK.
   function sdk.referrals_is_supported() warn() return false end
@@ -152,6 +156,30 @@ if not sdk then
     -- Entry point data: mock_entry_point_data in game.project is a JSON object string.
     function sdk.session_get_entry_point_data()
       return mock_config("mock_entry_point_data", "{}")
+    end
+
+    -- Registration prompt: always opens (draw your own prompt UI); login prints,
+    -- close fires on_close on the next frame and frees the handle.
+    local mock_prompts = {}
+    local mock_prompt_next = 0
+    function sdk.auth_show_registration_prompt(options_json, on_close)
+      mock_prompt_next = mock_prompt_next + 1
+      mock_prompts[mock_prompt_next] = on_close
+      print("[Yes2SDK] Mock: registration prompt shown (handle " .. mock_prompt_next .. ")")
+      return '{"handle":' .. mock_prompt_next .. '}'
+    end
+    function sdk.auth_registration_prompt_login(handle)
+      if not mock_prompts[handle] then return false end
+      print("[Yes2SDK] Mock: registration prompt login (the platform login flow does not run in the editor)")
+      return true
+    end
+    function sdk.auth_registration_prompt_close(handle)
+      local on_close = mock_prompts[handle]
+      if not on_close then return false end
+      mock_prompts[handle] = nil
+      print("[Yes2SDK] Mock: registration prompt closed (handle " .. tostring(handle) .. ")")
+      next_frame(function(tself) on_close(tself, true, nil) end)
+      return true
     end
 
     -- Ads: delayed flows so pause/resume wiring is exercised like a real ad.
@@ -1280,6 +1308,85 @@ end
 -- string of the player's resulting LeaderboardEntry.
 function M.leaderboard_set_score(name, score, metadata, callback)
   sdk.leaderboard_set_score(name, score, metadata, callback)
+end
+
+-- ── Registration prompt ──
+
+local _PROMPT_CONTEXT = "auth.showRegistrationPrompt"
+
+--- Ask a guest to register, with your own prompt UI.
+-- On platforms that support it, this opens the platform's minimal registration
+-- overlay and returns a handle whose functions you wire to your own buttons:
+-- handle.login() starts the platform login flow (the handle stays open) and
+-- handle.close() closes the prompt (the handle is freed). Both return true when
+-- the handle was still open, false otherwise.
+--
+-- options (table or JSON string, all optional):
+--   theme    "light" or "dark"
+--   message  text the player's messaging app is pre-filled with. It must not be
+--            empty or whitespace only, be at most 140 characters (the
+--            placeholder counts as written, an emoji counts as 2), contain
+--            {{registrationCode}} exactly once and no other {{...}}
+--            placeholder, and keep the code apart from neighbouring letters,
+--            digits or underscores with a space or punctuation.
+--   data     table, available from session_get_entry_point_data() after the
+--            player registers
+--   on_close function(self) called once when the prompt closes, by close() or
+--            by the platform's own close button. It runs after the call returns,
+--            never inside close() or this call, and never after an error return
+--
+-- Guests only: check auth_is_authenticated() first, a registered player gets an
+-- INVALID_OPERATION error. Save the player's progress before showing it. For a
+-- custom prompt the platform's own login reminders must be turned off for the
+-- game; that is a per-game platform setting, not an SDK call.
+--
+-- Returns handle, or nil and an error JSON string (see M.parse_error): codes
+-- FEATURE_NOT_SUPPORTED, INVALID_OPERATION, INVALID_PARAM (bad options or
+-- message), NOT_INITIALIZED. Synchronous: nothing is called back on failure.
+function M.auth_show_registration_prompt(options)
+  local on_close
+  local rest = options
+  if type(options) == "table" then
+    on_close = options.on_close
+    if on_close ~= nil and type(on_close) ~= "function" then
+      return nil, invalid_param("on_close must be a function, got " .. type(on_close), _PROMPT_CONTEXT)
+    end
+    rest = {}
+    for k, v in pairs(options) do
+      if k ~= "on_close" then rest[k] = v end
+    end
+  end
+  local encoded, err = encode_options(rest, _PROMPT_CONTEXT)
+  if err then return nil, err end
+
+  local raw = sdk.auth_show_registration_prompt(encoded, function(self)
+    if on_close then on_close(self) end
+  end)
+  local decoded
+  if type(raw) == "string" then
+    local ok, value = pcall(json.decode, raw)
+    if ok and type(value) == "table" then decoded = value end
+  end
+  if decoded and type(decoded.handle) == "number" then
+    local id = decoded.handle
+    return {
+      login = function() return sdk.auth_registration_prompt_login(id) == true end,
+      close = function() return sdk.auth_registration_prompt_close(id) == true end,
+    }
+  end
+  local e = decoded and decoded.error
+  if type(e) == "table" then
+    return nil, json.encode({
+      code = _error_field(e, "code") or "UNKNOWN_ERROR",
+      message = _error_field(e, "message") or "",
+      context = _error_field(e, "context") or _PROMPT_CONTEXT,
+    })
+  end
+  return nil, json.encode({
+    code = "UNKNOWN_ERROR",
+    message = "unexpected result: " .. tostring(raw),
+    context = _PROMPT_CONTEXT,
+  })
 end
 
 --- Get leaderboard entries with pagination.

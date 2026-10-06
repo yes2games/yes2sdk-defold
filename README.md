@@ -328,6 +328,43 @@ else
 end
 ```
 
+#### Registration prompt
+
+On platforms that support it, `auth_show_registration_prompt(options)` opens the platform's minimal registration overlay and you draw the rest of the prompt yourself. It returns a handle, or `nil` and an error JSON string (read it with `parse_error`):
+
+```lua
+if not yes2sdk.auth_is_authenticated() then
+    -- save progress first (for example data_set_string_async, then data_flush)
+    local prompt, err = yes2sdk.auth_show_registration_prompt({
+        theme = "dark",
+        message = "Join me in the game! {{registrationCode}} is my code.",
+        data = { reward = "welcome_back" },
+        on_close = function(self) hide_my_prompt_ui() end,
+    })
+    if prompt then
+        -- wire your own buttons:
+        --   prompt.login()  starts the platform login flow (the prompt stays open)
+        --   prompt.close()  closes the prompt (on_close fires once)
+    else
+        print(yes2sdk.parse_error(err).code)
+    end
+end
+```
+
+- Guests only: a registered player gets `INVALID_OPERATION`. Use `auth_is_authenticated()` to tell registered players apart.
+- Save the player's progress before showing the prompt.
+- `message` is optional. When given it must:
+  - not be empty or whitespace only,
+  - be at most 140 characters, counting `{{registrationCode}}` as written and an emoji as 2,
+  - contain `{{registrationCode}}` exactly once and no other `{{...}}` placeholder,
+  - keep the code apart from neighbouring letters, digits or underscores with a space or punctuation.
+
+  Otherwise you get `INVALID_PARAM`. Keep it short and plain: the platform may drop emoji and accented characters from a long pre-filled text.
+- `data` comes back from `session_get_entry_point_data()` after the player registers.
+- `on_close` runs once when the prompt closes, from `prompt.close()` or the platform's own close button. It always runs after the call returns, never inside the `prompt.close()` or `auth_show_registration_prompt` call, and never when `auth_show_registration_prompt` returned an error. `login()` and `close()` return `false` once the prompt is closed.
+- For a custom prompt, the platform's own login reminders must be turned off for the game. That is a per-game platform setting, not an SDK call.
+- Platforms without a registration prompt return `FEATURE_NOT_SUPPORTED`.
+
 ### Friends
 
 ```lua
@@ -767,6 +804,7 @@ The native extension is HTML5-only. In the Defold editor, `yes2sdk.*` calls run 
 - Referrals work too: `referrals_is_supported()` returns true, `referrals_share` succeeds and `referrals_list` returns an empty list
 - `context_share` succeeds on the next frame and prints the share, and `context_is_supported()` returns true (real platforms may report false even where sharing works, so do not gate on it)
 - **IAP works end to end**: `iap_is_supported()` returns true, `iap_get_catalog` returns a sample catalog, `iap_purchase` accepts any product id and resolves with a realistic purchase payload, and `iap_get_purchases` / `iap_consume_purchase` operate on a session purchase list. Mock purchases carry `"isSandbox":true`. Subscriptions are mocked too: a sample `yes2.mock.premium.monthly` offer, subscribe / cancel / retention offer / status on session state
+- `auth_show_registration_prompt` returns a handle: `login()` prints a line, `close()` fires `on_close` on the next frame
 - Other modules keep the one-time-warning stub with sensible defaults
 
 Configure the mock in `game.project` (all keys optional):
