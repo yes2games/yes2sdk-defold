@@ -159,3 +159,44 @@ test("bridge: errorString keeps today's semantics and never throws", () => {
     assert.equal(typeof bridge.errorString(hostile, "ctx"), "string");
 });
 
+
+test("bridge: complete gives back the stack it allocates for the payload", () => {
+    const { web, bridge } = load({});
+    const top = web.stackPointer();
+    bridge.complete(CB, 1, true, "a payload that needs stack bytes");
+    bridge.complete(CB, 2, false, null);
+    assert.equal(web.dyncalls.length, 2);
+    assert.equal(web.stackPointer(), top);
+});
+
+test("bridge: asynchronous completions through run leave the stack pointer unchanged", async () => {
+    const { web, bridge } = load({ iap: { a: () => Promise.resolve([{ id: "x" }]), b: () => Promise.reject("no") } });
+    const top = web.stackPointer();
+    for (let id = 1; id <= 50; id++) {
+        bridge.run(CB, id, id % 2 ? "iap.a" : "iap.b");
+    }
+    await web.flush();
+    assert.equal(web.dyncalls.length, 50);
+    assert.equal(web.stackPointer(), top);
+});
+
+test("bridge: declares the stack helpers it uses as __deps", () => {
+    const { web } = load({});
+    const deps = web.exports.$Yes2SDKBridge__deps ?? [];
+    for (const dep of ["$stackSave", "$stackRestore", "$stringToUTF8OnStack"]) {
+        assert.ok(deps.includes(dep), `$Yes2SDKBridge__deps must list ${dep}`);
+    }
+});
+
+test("bridge: a throwing module getter on the SDK completes once as a failure", async () => {
+    const sdk = {};
+    Object.defineProperty(sdk, "iap", {
+        get() {
+            throw "getter blew up";
+        },
+    });
+    const { web, bridge } = load(sdk);
+    assert.doesNotThrow(() => bridge.run(CB, 12, "iap.a"));
+    await web.flush();
+    assert.deepEqual(argsOf(web), [[12, 0, "getter blew up"]]);
+});

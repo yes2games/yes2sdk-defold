@@ -3,12 +3,21 @@ var Yes2SDKLib = {
     // Shared request bridge. Every async binding that takes (..., requestId, callback)
     // completes through it, so each response reaches the call that made it. Other
     // library files pull it in with __deps: ['$Yes2SDKBridge'].
+    $Yes2SDKBridge__deps: ['$stackSave', '$stackRestore', '$stringToUTF8OnStack'],
     $Yes2SDKBridge: {
         // Calls the C++ OnCompleteCallback(int requestId, int success, const char* payload).
         // A null or undefined payload is passed as a null pointer (nil in Lua).
+        // Completions usually run from a promise callback, outside any wasm frame, so
+        // nothing else would give the payload's stack bytes back: save and restore the
+        // stack pointer around the call, or every completion leaks strlen(payload) + 1.
         complete: function (cb, id, success, payload) {
-            var ptr = (payload === null || payload === undefined) ? 0 : stringToUTF8OnStack(String(payload));
-            {{{ makeDynCall("viii", "cb") }}}(id, success ? 1 : 0, ptr);
+            var sp = stackSave();
+            try {
+                var ptr = (payload === null || payload === undefined) ? 0 : stringToUTF8OnStack(String(payload));
+                {{{ makeDynCall("viii", "cb") }}}(id, success ? 1 : 0, ptr);
+            } finally {
+                stackRestore(sp);
+            }
         },
 
         // Failure payload handed to Lua. Never throws. The one place to change the
@@ -47,21 +56,26 @@ var Yes2SDKLib = {
             var dot = context.indexOf('.');
             var moduleName = context.substring(0, dot);
             var methodName = context.substring(dot + 1);
-            var sdk = window.Yes2SDK;
-            var mod = sdk ? sdk[moduleName] : undefined;
-            if (!mod) {
-                finish(false, 'SDK not initialized');
-                return;
-            }
+            var mod;
             var result;
+            // The module lookup is inside the try too: a throwing getter on the SDK
+            // object must still complete the request.
             try {
-                if (typeof mod[methodName] !== 'function') {
-                    throw context + ' is not a function';
+                var sdk = window.Yes2SDK;
+                mod = sdk ? sdk[moduleName] : undefined;
+                if (mod) {
+                    if (typeof mod[methodName] !== 'function') {
+                        throw context + ' is not a function';
+                    }
+                    var args = getArgs ? getArgs() : [];
+                    result = mod[methodName].apply(mod, args);
                 }
-                var args = getArgs ? getArgs() : [];
-                result = mod[methodName].apply(mod, args);
             } catch (e) {
                 fail(e);
+                return;
+            }
+            if (!mod) {
+                finish(false, 'SDK not initialized');
                 return;
             }
             Promise.resolve(result).then(function (value) {

@@ -193,3 +193,21 @@ test("harness: every tracked library loads into one shared scope with no problem
     assert.deepEqual(web.problems, []);
     assert.ok(Object.keys(web.exports).filter((key) => key.startsWith("Yes2SDK_")).length > 50);
 });
+
+test("harness: stringToUTF8OnStack lowers the fake stack pointer and stackSave/stackRestore round trip", () => {
+    const web = loadWebLib(
+        fixture(
+            "var L = {\nYes2SDK_alloc: function (s) { return stringToUTF8OnStack(s); },\n" +
+                "Yes2SDK_save: function () { return stackSave(); },\n" +
+                "Yes2SDK_restore: function (sp) { stackRestore(sp); },\n};\naddToLibrary(L);",
+        ),
+        {},
+    );
+    const top = web.stackPointer();
+    const sp = web.exports.Yes2SDK_save();
+    assert.equal(sp, top);
+    assert.equal(web.exports.Yes2SDK_alloc("hé"), "hé");
+    assert.equal(web.stackPointer(), top - 4);
+    web.exports.Yes2SDK_restore(sp);
+    assert.equal(web.stackPointer(), top);
+});
