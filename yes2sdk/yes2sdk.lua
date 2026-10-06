@@ -222,6 +222,17 @@ if not sdk then
       if callback then next_frame(function(tself) callback(tself, true, purchases) end) end
     end
 
+    -- Confirmed writes: nothing is stored in the editor, the calls just confirm.
+    function sdk.data_set_string_async(key, value, callback)
+      if callback then next_frame(function(tself) callback(tself, true, nil) end) end
+    end
+    function sdk.data_flush(callback)
+      if callback then next_frame(function(tself) callback(tself, true, nil) end) end
+    end
+    function sdk.player_flush_data(callback)
+      if callback then next_frame(function(tself) callback(tself, true, nil) end) end
+    end
+
     function sdk.iap_consume_purchase(purchase_token, callback)
       for i, purchase in ipairs(mock_purchases) do
         if purchase.token == purchase_token then
@@ -1267,6 +1278,57 @@ function M.session_get_entry_point_data()
   local ok, decoded = pcall(json.decode, text)
   if ok and type(decoded) == "table" then return decoded end
   return {}
+end
+
+-- ── Confirmed writes ──
+
+-- Without the extension and without the editor mock the confirmed writes cannot
+-- reach a platform: the callback still fires, next frame, with NOT_INITIALIZED.
+if not yes2sdk then
+  local function not_loaded(context)
+    return json.encode({
+      code = "NOT_INITIALIZED",
+      message = "Yes2SDK extension not loaded",
+      context = context,
+    })
+  end
+  if rawget(sdk, "data_set_string_async") == nil then
+    function sdk.data_set_string_async(key, value, callback)
+      fail_async(callback, not_loaded("data.setStringAsync"))
+    end
+  end
+  if rawget(sdk, "data_flush") == nil then
+    function sdk.data_flush(callback)
+      fail_async(callback, not_loaded("data.flushAsync"))
+    end
+  end
+  if rawget(sdk, "player_flush_data") == nil then
+    function sdk.player_flush_data(callback)
+      fail_async(callback, not_loaded("player.flushDataAsync"))
+    end
+  end
+end
+
+--- Store a string and learn whether the platform confirmed it.
+-- data_set_string is fire and forget. Use this (or data_flush) before something
+-- that may end the session, for example before showing a login prompt.
+-- Callback signature: function(self, success, err) where err is nil on success
+-- and an error JSON string on failure (see parse_error). success is false when
+-- the platform did not confirm the write.
+function M.data_set_string_async(key, value, callback)
+  sdk.data_set_string_async(key, value, callback)
+end
+
+--- Write pending data to the platform and learn whether it was confirmed.
+-- Callback signature: function(self, success, err), same as data_set_string_async.
+function M.data_flush(callback)
+  sdk.data_flush(callback)
+end
+
+--- Write pending player data (player_set_data) to the platform.
+-- Callback signature: function(self, success, err) where err is nil on success.
+function M.player_flush_data(callback)
+  sdk.player_flush_data(callback)
 end
 
 return M

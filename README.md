@@ -271,6 +271,19 @@ if yes2sdk.data_has_key("highScore") then
 end
 ```
 
+`data_set_string` is fire and forget: it returns before the platform has stored anything. When a write must survive something that may end the session (for example right before showing a login prompt), use a confirmed write on platforms that support it:
+
+```lua
+yes2sdk.data_set_string_async("progress", "level-5", function(self, success, err)
+    -- success is false when the platform did not confirm the write; err is an error JSON
+end)
+
+yes2sdk.data_flush(function(self, success, err) end)           -- write everything pending
+yes2sdk.player_flush_data(function(self, success, err) end)    -- write pending player_set_data values
+```
+
+On platforms without confirmed writes the callback reports `FEATURE_NOT_SUPPORTED`. In the editor the mock confirms every call on the next frame without storing anything.
+
 ### Analytics (recommended)
 
 ```lua

@@ -8,6 +8,7 @@ public:
     static int GetId(lua_State* L);
     static int GetData(lua_State* L);
     static int SetData(lua_State* L);
+    static int FlushData(lua_State* L);
     static int GetUniqueId(lua_State* L);
     static int GetIdsPerGame(lua_State* L);
     static int GetPayingStatus(lua_State* L);
@@ -21,6 +22,7 @@ extern "C" {
     const char* Yes2SDK_player_getId();
     void Yes2SDK_player_getData(const char* keysJson, int requestId, Yes2SDKRequests::OnCompleteCallback callback);
     void Yes2SDK_player_setData(const char* dataJson, int requestId, Yes2SDKRequests::OnCompleteCallback callback);
+    void Yes2SDK_player_flushData(int requestId, Yes2SDKRequests::OnCompleteCallback callback);
     void Yes2SDK_player_getUniqueId(int requestId, Yes2SDKRequests::OnCompleteCallback callback);
     void Yes2SDK_player_getIdsPerGame(int requestId, Yes2SDKRequests::OnCompleteCallback callback);
     void Yes2SDK_player_getPayingStatus(int requestId, Yes2SDKRequests::OnCompleteCallback callback);
