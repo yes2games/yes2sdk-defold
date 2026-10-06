@@ -10,10 +10,20 @@ var Yes2SDKBannersLib = {
 
     Yes2SDK_banners_show: function (idPtr, sizePtr) {
         try {
-            if (window.Yes2SDK && window.Yes2SDK.banners) {
-                window.Yes2SDK.banners.showBannerAsync(UTF8ToString(idPtr), UTF8ToString(sizePtr));
+            var banners = window.Yes2SDK && window.Yes2SDK.banners;
+            if (!banners || typeof banners.showBanner !== 'function') {
+                console.warn('[Yes2SDK] banners_show failed: banner API is unavailable');
+                return;
             }
-        } catch (e) {}
+            var result = banners.showBanner(UTF8ToString(idPtr), UTF8ToString(sizePtr));
+            if (result && typeof result.catch === 'function') {
+                result.catch(function (e) {
+                    console.warn('[Yes2SDK] banners_show failed:', e);
+                });
+            }
+        } catch (e) {
+            console.warn('[Yes2SDK] banners_show failed:', e);
+        }
     },
 
     Yes2SDK_banners_hide: function (idPtr) {
