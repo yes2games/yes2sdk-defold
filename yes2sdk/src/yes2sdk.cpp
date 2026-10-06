@@ -14,6 +14,7 @@
 #include "yes2sdk_config.h"
 #include "yes2sdk_review.h"
 #include "yes2sdk_iap.h"
+#include "yes2sdk_context.h"
 #include "yes2sdk_requests.h"
 #include "luautils.h"
 #include <dmsdk/sdk.h>
@@ -365,6 +366,10 @@ static const luaL_reg Module_methods[] = {
     {"iap_get_purchases", Yes2SDKIap::GetPurchases},
     {"iap_consume_purchase", Yes2SDKIap::ConsumePurchase},
     {"iap_is_supported", Yes2SDKIap::IsSupported},
+
+    // Context (image share)
+    {"context_share", Yes2SDKContext::Share},
+    {"context_is_supported", Yes2SDKContext::IsSupported},
 
     {0, 0}
 };
