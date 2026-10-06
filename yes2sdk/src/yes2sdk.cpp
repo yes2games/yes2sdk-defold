@@ -31,6 +31,7 @@ lua_Listener onStartGameListener;
 // lifetime of the game session (YouTube cert reqs #14, #21, #22).
 lua_Listener onPauseListener;
 lua_Listener onResumeListener;
+lua_Listener onExitRequestedListener;
 lua_Listener onAudioEnabledChangeListener;
 // Yandex account-selection dialog open / close (payload-free, like pause/resume).
 lua_Listener onAccountDialogOpenListener;
@@ -139,6 +140,19 @@ void Yes2SDK::OnResumeFromJs()
     assert(top == lua_gettop(L));
 }
 
+void Yes2SDK::OnExitRequestedFromJs()
+{
+    lua_State *L = onExitRequestedListener.m_L;
+    if (!L) return;
+    int top = lua_gettop(L);
+
+    lua_pushlistener(L, onExitRequestedListener);
+    int ret = lua_pcall(L, 1, 0, 0);
+    if (ret != 0) { lua_logpcallerror(L, "on_exit_requested"); }
+
+    assert(top == lua_gettop(L));
+}
+
 void Yes2SDK::OnAudioEnabledChangeFromJs(const int enabled)
 {
     lua_State *L = onAudioEnabledChangeListener.m_L;
@@ -197,6 +211,15 @@ int Yes2SDK::OnResume(lua_State *L)
     return 0;
 }
 
+int Yes2SDK::OnExitRequested(lua_State *L)
+{
+    int top = lua_gettop(L);
+    luaL_checklistener(L, 1, onExitRequestedListener);
+    Yes2SDK_onExitRequested(Yes2SDK::OnExitRequestedFromJs);
+    assert(top == lua_gettop(L));
+    return 0;
+}
+
 int Yes2SDK::OnAudioEnabledChange(lua_State *L)
 {
     int top = lua_gettop(L);
@@ -233,6 +256,7 @@ static const luaL_reg Module_methods[] = {
     // Lifecycle events (YouTube cert reqs #14, #21, #22)
     {"on_pause", Yes2SDK::OnPause},
     {"on_resume", Yes2SDK::OnResume},
+    {"on_exit_requested", Yes2SDK::OnExitRequested},
     {"on_audio_enabled_change", Yes2SDK::OnAudioEnabledChange},
     {"on_account_dialog_open", Yes2SDK::OnAccountDialogOpen},
     {"on_account_dialog_close", Yes2SDK::OnAccountDialogClose},

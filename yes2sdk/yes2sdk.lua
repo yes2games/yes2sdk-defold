@@ -93,6 +93,8 @@ if not sdk then
       if callback then next_frame(function(tself) callback(tself, true, nil) end) end
     end
     function sdk.set_loading_progress(progress) end
+    -- Exit requests never happen in the editor, so registering is a quiet no-op.
+    function sdk.on_exit_requested(callback) end
 
     -- Ads: delayed flows so pause/resume wiring is exercised like a real ad.
     -- Durations match the Unity SDK's mock ad popup.
@@ -335,6 +337,15 @@ end
 -- Callback signature: function(self)
 function M.on_resume(callback)
   sdk.on_resume(callback)
+end
+
+--- Subscribe to the platform asking the game to exit.
+-- The player has NOT confirmed leaving yet. Save synchronously inside the handler
+-- (data_set_string and friends): the SDK flushes player data right after it returns.
+-- Async work started here is not awaited. Register after M.initialize has called back.
+-- Callback signature: function(self)
+function M.on_exit_requested(callback)
+  sdk.on_exit_requested(callback)
 end
 
 --- Subscribe to platform audio mute/unmute changes.

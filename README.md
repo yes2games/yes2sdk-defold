@@ -159,6 +159,7 @@ end)
 
 - `on_pause`: the game must stop its loop, audio and network calls until `on_resume`.
 - `on_resume`: the game may continue. A resume is not guaranteed to follow every pause.
+- `on_exit_requested`: on platforms that support it, the platform is about to close the game and the player has not confirmed leaving. Save synchronously inside the handler (for example with `data_set_string`): the SDK flushes player data right after it returns, and async work started there is not awaited. Register it after `initialize`, like the other events.
 - `on_audio_enabled_change`: `enabled` is a boolean. Keep the game's audio in line with it, and read `session_is_audio_enabled()` once at startup for the initial state.
 - `on_account_dialog_open` / `on_account_dialog_close`: pause while the dialog is open, resume when it closes. Platforms without such a dialog never fire them.
 - Each callback runs once per platform event. Registering again for the same event replaces the previous callback.

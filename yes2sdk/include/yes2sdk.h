@@ -14,6 +14,7 @@ public:
     // (integration #14, #21, #22). The same callback is invoked on every event.
     typedef void (*OnPauseCallback)();
     typedef void (*OnResumeCallback)();
+    typedef void (*OnExitRequestedCallback)();
     typedef void (*OnAudioEnabledChangeCallback)(const int enabled);
     // Yandex account-selection dialog open / close. No payload, mirroring
     // pause / resume — fire whenever the platform opens or closes the dialog.
@@ -26,6 +27,7 @@ public:
     static int GetPlatform(lua_State* L);
     static int OnPause(lua_State* L);
     static int OnResume(lua_State* L);
+    static int OnExitRequested(lua_State* L);
     static int OnAudioEnabledChange(lua_State* L);
     static int OnAccountDialogOpen(lua_State* L);
     static int OnAccountDialogClose(lua_State* L);
@@ -35,6 +37,7 @@ private:
     static void OnStartGame(const int success, const char* error);
     static void OnPauseFromJs();
     static void OnResumeFromJs();
+    static void OnExitRequestedFromJs();
     static void OnAudioEnabledChangeFromJs(const int enabled);
     static void OnAccountDialogOpenFromJs();
     static void OnAccountDialogCloseFromJs();
@@ -48,6 +51,7 @@ extern "C"
     const char* Yes2SDK_getPlatform();
     void Yes2SDK_onPause(Yes2SDK::OnPauseCallback callback);
     void Yes2SDK_onResume(Yes2SDK::OnResumeCallback callback);
+    void Yes2SDK_onExitRequested(Yes2SDK::OnExitRequestedCallback callback);
     void Yes2SDK_onAudioEnabledChange(Yes2SDK::OnAudioEnabledChangeCallback callback);
     void Yes2SDK_onAccountDialogOpen(Yes2SDK::OnAccountDialogOpenCallback callback);
     void Yes2SDK_onAccountDialogClose(Yes2SDK::OnAccountDialogCloseCallback callback);
