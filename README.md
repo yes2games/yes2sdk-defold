@@ -130,6 +130,40 @@ yes2sdk.start_game(function(self, success, error) ... end)   -- when game is pla
 
 > **Important:** these three calls fire in three distinct stages. `initialize` is at app launch. `set_loading_progress` is updated as your assets load. `start_game` runs **only when the game is actually playable** (splash gone, scene loaded, accepting input).
 
+### Lifecycle events (required)
+
+The platform tells the game when to pause, when it may resume and when the player muted or unmuted audio. Some platforms reject a game that ignores these. Subscribe inside the `initialize` success callback: the events are not available before the SDK is ready.
+
+```lua
+yes2sdk.initialize(function(self, success, error)
+    if not success then return end
+
+    -- Initial audio state, then follow every change.
+    set_game_audio(yes2sdk.session_is_audio_enabled())
+    yes2sdk.on_audio_enabled_change(function(self, enabled)
+        set_game_audio(enabled)
+    end)
+
+    yes2sdk.on_pause(function(self)
+        pause_game()   -- stop the game loop, audio and network calls
+    end)
+    yes2sdk.on_resume(function(self)
+        resume_game()  -- the game may continue
+    end)
+
+    -- The platform's account selection dialog (only some platforms show one).
+    yes2sdk.on_account_dialog_open(function(self) pause_game() end)
+    yes2sdk.on_account_dialog_close(function(self) resume_game() end)
+end)
+```
+
+- `on_pause`: the game must stop its loop, audio and network calls until `on_resume`.
+- `on_resume`: the game may continue. A resume is not guaranteed to follow every pause.
+- `on_audio_enabled_change`: `enabled` is a boolean. Keep the game's audio in line with it, and read `session_is_audio_enabled()` once at startup for the initial state.
+- `on_account_dialog_open` / `on_account_dialog_close`: pause while the dialog is open, resume when it closes. Platforms without such a dialog never fire them.
+- Each callback runs once per platform event. Registering again for the same event replaces the previous callback.
+- Register from a long-lived script (see [Callbacks and script lifetime](#callbacks-and-script-lifetime)).
+
 ### Ads (required)
 
 Interstitial ads run at natural break points. Rewarded ads run only when the player opts in.
@@ -153,7 +187,7 @@ function show_rewarded(self)
     yes2sdk.ads_show_rewarded("extra-life",
         function(self) end,                                       -- before_ad: pause
         function(self) yes2sdk.session_gameplay_start() end,      -- after_ad: resume
-        function(self) yes2sdk.session_gameplay_start() end,      -- ad_dismissed: no reward
+        function(self) end,                                       -- ad_dismissed: no reward
         function(self) grant_extra_life() end,                    -- ad_viewed: GRANT REWARD
         function(self) end                                        -- no_fill: no reward, after_ad follows
     )
@@ -165,12 +199,12 @@ end
 The callbacks fire in this order. Pay attention — getting it wrong silently breaks reward logic:
 
 ```text
-before_ad     → pause game (always)
+before_ad     → pause game (fires when the ad starts; usually skipped on no_fill)
 (ad shown)
 ad_viewed     → grant reward (ONLY fires if the player watched the full ad)
-   — or —
+   or
 ad_dismissed  → no reward (fires if the player skipped/closed early)
-   — or —
+   or
 no_fill       → no ad available (fires if the platform couldn't deliver)
 after_ad      → resume game (always, fires after the result, no_fill included)
 ```
@@ -180,7 +214,7 @@ Every rewarded ad ends with exactly one of `ad_viewed`, `ad_dismissed` or `no_fi
 - If the platform reports a second result for the same ad, the SDK drops it and logs a warning. The first result wins.
 - If the platform sends `after_ad` without a result, the SDK calls `ad_dismissed` first (with a warning), then `after_ad`. It never calls `ad_viewed` on its own, so a reward is only granted when the platform says the ad was watched.
 - An error raised inside one of your ad callbacks is logged as `[Yes2SDK] <name> callback error: ...` and does not stop the next callback, so an error in `ad_dismissed` still lets `after_ad` resume the game.
-- `no_fill` is always followed by `after_ad`, for interstitials too: if the platform sends no `after_ad` by the next frame, the SDK calls it. Resume the game in `after_ad`. The one exception is a call rejected because another ad is already in flight: it gets `no_fill` only, since its `after_ad` would resume the game while the other ad is still on screen.
+- `no_fill` is always followed by `after_ad`, for interstitials too: if the platform sends no `after_ad` by the next frame, the SDK calls it. Resume the game in `after_ad`. The one exception is a call rejected because another ad is already in flight: it gets `no_fill` only, since its `after_ad` would resume the game while the other ad is still on screen. That `no_fill` runs at once, inside the `ads_show_*` call, and with no arguments, so `self` is `nil` there.
 
 > ⚠️ **Do NOT grant rewards in `after_ad`.** `after_ad` fires for completion, dismissal, and no-fill alike — granting rewards there gives them away on skip. Always grant in `ad_viewed`.
 
@@ -206,7 +240,7 @@ yes2sdk.session_gameplay_stop()
 local locale = yes2sdk.session_get_locale()  -- e.g. "en", "ja", "ru"
 ```
 
-> `analytics_log_level_start` / `_end` can also trigger gameplay start/stop on some platforms — use either pair, but don't call both.
+> `analytics_log_level_start` / `_end` can also trigger gameplay start/stop on some platforms. Calling both pairs is safe: the SDK keeps a single owner of the gameplay state, so a start or stop that is already in effect is not sent twice.
 
 ### Data (required)
 
@@ -328,6 +362,128 @@ local settings_json = yes2sdk.game_get_settings()
 
 > `game_happy_time()` signals to the platform that the player just hit a positive moment — level cleared, achievement unlocked, boss defeated. Some platforms (notably CrazyGames) use this to time monetization prompts so they don't interrupt frustrating moments. Call it sparingly, only on genuine highs.
 
+### In-app purchases
+
+Gate every purchase UI on `iap_is_supported()`. Product ids are the ones configured for your game on the platform.
+
+```lua
+local function grant_and_consume(purchase)
+    grant_product(purchase.productId)   -- give the item
+    save_progress()                     -- persist it BEFORE consuming
+    yes2sdk.iap_consume_purchase(purchase.purchaseToken, function(self, success, error)
+        if not success then
+            print("Consume failed: " .. yes2sdk.parse_error(error).code)
+        end
+    end)
+end
+
+-- On launch, after initialize: finish purchases a previous session never completed.
+if yes2sdk.iap_is_supported() then
+    yes2sdk.iap_get_purchases(function(self, success, purchases_json)
+        if success then
+            for _, purchase in ipairs(json.decode(purchases_json)) do
+                grant_and_consume(purchase)
+            end
+        end
+    end)
+end
+
+-- Buying.
+yes2sdk.iap_purchase("coins_100", nil, function(self, success, result)
+    if success then
+        grant_and_consume(json.decode(result))
+    elseif yes2sdk.parse_error(result).code ~= "IAP_PURCHASE_CANCELLED" then
+        show_purchase_failed()
+    end
+end)
+```
+
+- **Finish incomplete purchases on launch.** A purchase can be paid for and then lost to a reload or a crash before the game granted it. `iap_get_purchases` returns every purchase that was not consumed yet; grant and consume each one.
+- **Grant and save before consuming.** Consuming tells the platform the item was delivered. If the game consumes first and then fails to save, the player paid for nothing.
+- **Purchase JSON fields:** `purchaseToken` (pass it to `iap_consume_purchase`), `productId`, `paymentId`, `purchaseTime` (ISO 8601), `developerPayload` (when you passed one), and, where the platform provides them, `signedRequest` (for server verification) and `isSandbox` (`true` when no real money changed hands; grant the item as usual but keep it out of revenue reporting).
+- **Verify server side.** For anything of value, send `signedRequest` to your own server and check it there. Never trust a purchase on the client alone.
+- **One checkout at a time.** A second `iap_purchase` while one is open is rejected: it logs a warning and its callback is never called. The same applies to `iap_consume_purchase`. Wait for the callback before the next call.
+- The catalog: `iap_get_catalog(callback)` returns a JSON array of products (`productId`, `title`, `description`, `imageUri`, `price`, `priceCurrencyCode`, `priceAmount`); `iap_get_product(product_id, callback)` returns one product, or the literal `"null"` when the id is unknown.
+- Failures carry an error code, see [Errors](#errors). In the editor, purchases run against a mock: `mock_purchase_result = fail` in `game.project` tests the failure path (see [Editor Testing](#editor-testing)).
+
+### Leaderboard
+
+```lua
+if yes2sdk.leaderboard_is_supported() then
+    yes2sdk.leaderboard_set_score("weekly", 1500, nil, function(self, success, entry_json)
+        if success then
+            local entry = json.decode(entry_json)
+            print("Rank " .. entry.rank .. ", score " .. entry.formattedScore)
+        end
+    end)
+
+    -- Top 10 entries (count, offset).
+    yes2sdk.leaderboard_get_entries("weekly", 10, 0, function(self, success, entries_json)
+        if success then
+            for _, entry in ipairs(json.decode(entries_json)) do
+                print(entry.rank, entry.playerName, entry.score)
+            end
+        end
+    end)
+end
+```
+
+`leaderboard_get(name, callback)` returns the leaderboard (`name`, `contextId`, `entries`). `leaderboard_get_player_entry(name, callback)` returns the player's own entry, or the literal `"null"` when the player is not ranked. The third argument of `leaderboard_set_score` is an optional metadata string (pass `nil` to omit).
+
+### Stats
+
+```lua
+if yes2sdk.stats_is_supported() then
+    yes2sdk.stats_increment(json.encode({ kills = 1 }), function(self, success, stats_json)
+        if success then
+            print("Kills: " .. json.decode(stats_json).kills)
+        end
+    end)
+
+    yes2sdk.stats_get(json.encode({ "kills", "deaths" }), function(self, success, stats_json) end)
+    yes2sdk.stats_set(json.encode({ deaths = 0 }), function(self, success, error) end)
+end
+```
+
+### Remote config
+
+```lua
+if yes2sdk.config_is_supported() then
+    local options = json.encode({ defaults = { new_shop = "false" } })
+    yes2sdk.config_get_flags(options, function(self, success, flags_json)
+        if success then
+            local flags = json.decode(flags_json)
+            enable_new_shop(flags.new_shop == "true")
+        end
+    end)
+end
+```
+
+Flag values are strings. Pass `"{}"` when you have no options; options that are not valid JSON are treated as no options.
+
+### Review
+
+Ask for a rating at a positive moment, never in the middle of play.
+
+```lua
+if yes2sdk.review_is_supported() then
+    yes2sdk.review_can_review(function(self, success, eligibility_json)
+        if success and json.decode(eligibility_json).canReview then
+            yes2sdk.review_request_review(function(self, success, result_json) end)
+        end
+    end)
+end
+```
+
+---
+
+## Callbacks and script lifetime
+
+- Every async function takes a callback `function(self, success, result)`. Overlapping calls to the same function each get their own callback, with their own result. The exceptions: `iap_purchase`, `iap_consume_purchase` and the `ads_show_*` calls reject a second call while one is open, and `initialize` and `start_game` are called once per session.
+- A call that fails is reported through its callback with `success == false` and an error string, not raised into your script. That includes a call the loaded SDK does not provide (see [Errors](#errors)).
+- Call SDK functions from a long-lived script, for example the script of your main collection. The callback and the SDK's own timers belong to the script instance that made the call. A script in a collection proxy that gets unloaded, or that is paused with a time step of 0 while an ad is up, can miss its callbacks or delay the ad's release.
+- If the script instance that made a call is deleted before the response arrives, the response is dropped and a warning is logged. Nothing runs against the deleted instance.
+
 ---
 
 ## Errors
@@ -348,8 +504,8 @@ Fallback codes added by the extension itself:
 
 | Code | Meaning |
 |---|---|
-| `NOT_INITIALIZED` | The SDK (or the module behind the call) is not loaded yet. Call `initialize` first. |
-| `FEATURE_NOT_SUPPORTED` | The loaded SDK does not provide this call. |
+| `NOT_INITIALIZED` | The SDK runtime (or the module behind the call) is not available, or the SDK is not initialized yet. |
+| `FEATURE_NOT_SUPPORTED` | The loaded SDK does not provide this call, for example an older runtime without the method. |
 | `INVALID_PARAM` | The arguments were rejected before the call was made, e.g. a JSON string that does not parse. |
 | `UNKNOWN_ERROR` | Anything else. Check `message`. |
 
@@ -399,6 +555,8 @@ Your build is ready for review when:
 - [ ] `session_gameplay_stop()` is called before every ad; `session_gameplay_start()` after
 - [ ] Gameplay resumes in `after_ad` (`no_fill` is followed by `after_ad`)
 - [ ] `data_*` functions are used for persistent player data
+- [ ] Lifecycle events are handled: `on_pause` / `on_resume` pause and resume the game, `on_audio_enabled_change` follows the platform's mute state
+- [ ] If the game sells items: incomplete purchases from `iap_get_purchases` are granted and consumed on launch
 
 The QA Inspector in the Yes2Games Dashboard validates all of this automatically.
 
