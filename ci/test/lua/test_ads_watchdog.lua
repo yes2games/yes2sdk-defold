@@ -175,7 +175,7 @@ function T.native_failure_still_reports_no_fill_and_stops_the_watchdog()
   local sdk = h.load_wrapper{ native = fake }
   local events, cb = recorder()
   show_interstitial(sdk, cb)
-  h.falsy(sdk.ads_is_ad_showing())
+  h.truthy(sdk.ads_is_ad_showing(), "the latch is held until no_fill")
   h.advance(1)
   h.deep_eq(events, { "no_fill", "after" })
   h.eq(h.pending_timers(), 0)

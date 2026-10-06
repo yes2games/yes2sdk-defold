@@ -223,9 +223,9 @@ if not sdk then
   end
 end
 
--- True from any ads_show_* call until its request is released (after_ad, no_fill,
--- watchdog or native-call failure). Used to reject concurrent ad calls and exposed
--- via M.ads_is_ad_showing().
+-- True from any ads_show_* call until its request is released (after_ad, no_fill
+-- or the watchdog; a failed native call releases as its next-frame no_fill is
+-- delivered). Used to reject concurrent ad calls and exposed via M.ads_is_ad_showing().
 local _ad_in_flight = false
 
 -- The request that currently owns the latch, or nil. Each ads_show_* call creates
@@ -544,11 +544,15 @@ end
 
 local function _fail_native_call(request, name, err)
   -- The native call raised, so the platform will send nothing for this request.
-  -- Release now; no_fill (then after_ad) arrives on the next frame with the timer's self.
-  if not _release_ad(request) then return end
+  -- no_fill (then after_ad) arrives on the next frame with the timer's self. The
+  -- latch is held until then, so a second ad called in the same frame is rejected
+  -- as concurrent instead of starting under this request's pending after_ad.
+  if request.released or request ~= _active_request then return end
   print("[Yes2SDK] " .. name .. " native call failed: " .. tostring(err) .. ", reporting no_fill.")
   _next_frame(function(self)
-    _end_with_no_fill(request, _synth_self(request, self), true)
+    if _release_ad(request) then
+      _end_with_no_fill(request, _synth_self(request, self), true)
+    end
   end)
 end
 

@@ -144,7 +144,7 @@ function T.native_failure_reports_no_fill_then_after_ad()
   local sdk = h.load_wrapper{ native = fake }
   local events, cb, args = recorder()
   show_rewarded(sdk, cb)
-  h.falsy(sdk.ads_is_ad_showing(), "a failed native call kept the latch")
+  h.truthy(sdk.ads_is_ad_showing(), "the latch is held until no_fill")
   h.advance(1)
   h.deep_eq(events, { "no_fill", "after" })
   h.eq(args[1].n, 2, "no_fill takes (self, true)")
@@ -409,6 +409,56 @@ function T.playing_phase_watchdog_gives_dismissed_and_after_ad_one_self()
   h.truthy(args[2][1] ~= nil, "synthesized ad_dismissed got a nil self")
   h.eq(args[2][1], args[3][1], "ad_dismissed and after_ad got different selfs")
   h.eq(args[2][2], true)
+end
+
+-- A failed native call keeps the latch until its no_fill is delivered on the
+-- next frame, so a second ad called in the same frame is a concurrent call and
+-- the failed ad's after_ad can never resume the game under it.
+function T.native_failure_keeps_the_latch_until_its_no_fill()
+  local log, tag = shared_log()
+  local fake = h.fake_native{ overrides = {
+    ads_show_interstitial = function() error("native boom") end,
+    -- This platform fires before_ad inside the request itself.
+    ads_show_rewarded = function(_, before) before(h.state.script, true) end,
+  } }
+  local sdk = h.load_wrapper{ native = fake }
+  local showing_in_no_fill = "unset"
+  sdk.ads_show_interstitial("menu", tag("A", "before"), tag("A", "after"),
+    tag("A", "no_fill", function() showing_in_no_fill = sdk.ads_is_ad_showing() end))
+  h.truthy(sdk.ads_is_ad_showing(), "the failed ad freed the latch before its no_fill")
+  sdk.ads_show_rewarded("reward", tag("B", "before"), tag("B", "after"),
+    tag("B", "dismissed"), tag("B", "viewed"), tag("B", "no_fill"))
+  h.deep_eq(log, { "B.no_fill" }, "a call in the same frame must be rejected as concurrent")
+  h.eq(#fake:calls_to("ads_show_rewarded"), 0, "the rejected call reached the platform")
+  h.truthy(sdk.ads_is_ad_showing())
+  h.advance(1)
+  h.deep_eq(log, { "B.no_fill", "A.no_fill", "A.after" })
+  h.eq(showing_in_no_fill, false, "ads_is_ad_showing() must be false inside no_fill")
+  h.falsy(sdk.ads_is_ad_showing())
+  h.eq(h.pending_timers(), 0, "a timer was left running")
+end
+
+function T.native_failure_retry_from_no_fill_gets_the_first_after_ad_first()
+  local log, tag = shared_log()
+  local fake = h.fake_native{ overrides = {
+    ads_show_interstitial = function() error("native boom") end,
+    ads_show_rewarded = function(_, before) before(h.state.script, true) end,
+  } }
+  local sdk = h.load_wrapper{ native = fake }
+  sdk.ads_show_interstitial("menu", tag("A", "before"), tag("A", "after"),
+    tag("A", "no_fill", function()
+      sdk.ads_show_rewarded("reward", tag("B", "before"), tag("B", "after"),
+        tag("B", "dismissed"), tag("B", "viewed"), tag("B", "no_fill"))
+    end))
+  h.advance(1)
+  h.deep_eq(log, { "A.no_fill", "A.after", "B.before" })
+  h.truthy(sdk.ads_is_ad_showing(), "the retry is in flight")
+  fake:fire("ads_show_rewarded", R_VIEWED)
+  fake:fire("ads_show_rewarded", R_AFTER)
+  h.advance(1)
+  h.deep_eq(log, { "A.no_fill", "A.after", "B.before", "B.viewed", "B.after" })
+  h.falsy(sdk.ads_is_ad_showing())
+  h.eq(h.pending_timers(), 0, "a timer was left running")
 end
 
 return T
