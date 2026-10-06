@@ -12,7 +12,7 @@
 //
 // Each transform is anchored to the one syntactic shape that carries the version
 // in its file. Nothing here replaces a bare SemVer string: yes2sdk/lib/web/
-// lib_yes2sdk.js carries REQUIRED_CORE_VERSION '2.2.0', a Core floor that must
+// lib_yes2sdk.js carries REQUIRED_CORE_VERSION '2.10.0', a Core floor that must
 // never move with this SDK's version, and a loose matcher would eat it.
 //
 // Usage:
