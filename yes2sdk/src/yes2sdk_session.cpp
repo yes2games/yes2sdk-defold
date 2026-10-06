@@ -52,4 +52,13 @@ int Yes2SDKSession::GetDeviceInfo(lua_State *L)
     return 1;
 }
 
+int Yes2SDKSession::GetEntryPointData(lua_State *L)
+{
+    int top = lua_gettop(L);
+    const char *data = Yes2SDK_session_getEntryPointData();
+    lua_pushstring(L, data ? data : "{}");
+    assert(top + 1 == lua_gettop(L));
+    return 1;
+}
+
 #endif

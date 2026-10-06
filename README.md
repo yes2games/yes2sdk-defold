@@ -242,6 +242,15 @@ yes2sdk.session_gameplay_stop()
 local locale = yes2sdk.session_get_locale()  -- e.g. "en", "ja", "ru"
 ```
 
+Entry point data is whatever the player arrived with, for example from a shared link or after registering. It is always a table (empty when there is none, or on platforms that do not support it):
+
+```lua
+local entry = yes2sdk.session_get_entry_point_data()
+if entry.invite then
+    show_welcome(entry.invite)
+end
+```
+
 > `analytics_log_level_start` / `_end` can also trigger gameplay start/stop on some platforms. Calling both pairs is safe: the SDK keeps a single owner of the gameplay state, so a start or stop that is already in effect is not sent twice.
 
 ### Data (required)
@@ -632,11 +641,13 @@ mock = 0
 mock_rewarded_result = dismissed
 mock_ad_result = nofill
 mock_purchase_result = fail
+mock_entry_point_data = {"invite":"friend1"}
 ```
 
 - `mock = 0` disables the mock entirely (old stub behavior). Default: enabled.
 - `mock_rewarded_result = dismissed` makes rewarded ads fire `ad_dismissed` (no-reward path). Default: `viewed`.
 - `mock_ad_result = nofill` makes ad calls fail with `no_fill`. Default: `normal`.
+- `mock_entry_point_data` is a JSON object string returned by `session_get_entry_point_data()`. Default: `{}`.
 - `mock_purchase_result = fail` makes `iap_purchase` fail with an `IAP_PURCHASE_FAILED` error (see [Errors](#errors)). Default: `success`.
 
 The mock is editor/desktop only. HTML5 bundles always use the real platform SDK, and a missing extension in an HTML5 build still prints the loud bundling warning. For richer simulation (specific locales, network conditions), use the QA Inspector in the Yes2Games Dashboard.

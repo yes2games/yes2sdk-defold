@@ -274,6 +274,7 @@ static const luaL_reg Module_methods[] = {
     {"session_get_locale", Yes2SDKSession::GetLocale},
     {"session_is_audio_enabled", Yes2SDKSession::IsAudioEnabled},
     {"session_get_device_info", Yes2SDKSession::GetDeviceInfo},
+    {"session_get_entry_point_data", Yes2SDKSession::GetEntryPointData},
 
     // Analytics
     {"analytics_log_level_start", Yes2SDKAnalytics::LogLevelStart},

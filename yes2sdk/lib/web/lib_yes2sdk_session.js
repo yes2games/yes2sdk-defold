@@ -50,6 +50,24 @@ var Yes2SDKSessionLib = {
         return stringToUTF8OnStack(JSON.stringify({
             type: "unknown", isMobile: false, isDesktop: false, isTablet: false, isTV: false
         }));
+    },
+
+    Yes2SDK_session_getEntryPointData: function () {
+        var out = "{}";
+        try {
+            var session = window.Yes2SDK && window.Yes2SDK.session;
+            if (session) {
+                if (typeof session.getEntryPointDataJson === 'function') {
+                    out = session.getEntryPointDataJson();
+                } else if (typeof session.getEntryPointData === 'function') {
+                    out = JSON.stringify(session.getEntryPointData() || {});
+                }
+            }
+        } catch (e) {
+            out = "{}";
+        }
+        if (typeof out !== 'string' || !out) { out = "{}"; }
+        return stringToUTF8OnStack(out);
     }
 }
 
