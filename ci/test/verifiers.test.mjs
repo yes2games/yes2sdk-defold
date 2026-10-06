@@ -277,7 +277,14 @@ function jsFixture(files) {
 test("the syntax check passes on every tracked library file as it stands", () => {
     const result = run("check-web-js-syntax.mjs", ["--root", REPO_ROOT]);
     assert.equal(result.status, 0, result.stderr);
-    assert.match(result.stdout, /16 tracked file\(s\)/);
+    // Derived from git with the same rule the checker uses (tracked, under the
+    // library dir, ending in .js), so adding a library does not edit this test
+    // and the report still has to account for every tracked file.
+    const listed = spawnSync("git", ["-C", REPO_ROOT, "ls-files", "-z", "--", "yes2sdk/lib/web"], { encoding: "utf8" });
+    assert.equal(listed.status, 0, listed.stderr);
+    const expected = listed.stdout.split("\0").filter((path) => path.endsWith(".js")).length;
+    assert.ok(expected > 0, "no tracked library files found");
+    assert.match(result.stdout, new RegExp(`: ${expected} tracked file\\(s\\)`));
 });
 
 test("the zero-argument macro form parses, which node --check cannot do", () => {

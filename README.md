@@ -7,6 +7,7 @@ A single SDK for your Defold HTML5 game. Integrate once against Yes2SDK, submit 
 
 ## Requirements
 
+- Yes2SDK runtime 2.10.0 or newer for referrals, subscriptions, notifications, context sharing, entry point data, the registration prompt, confirmed writes and `on_exit_requested`. Older runtimes report `FEATURE_NOT_SUPPORTED` for those calls, and `on_exit_requested` never fires.
 - Defold 1.10.2 or newer — the oldest version `build.defold.com`, Defold's hosted extension build server, still compiles native extensions for. This SDK *is* a native extension, so on an older Defold the bundle fails at the build server with `HTTP 501 — Engine version '<sha>' is not supported on the current server`, whatever else your project does.
 
   Do not lower this number without first checking that the hosted server accepts the older SDK again. Defold prunes old SDKs from that server as new versions ship, so this floor moves up over time and never down. It is a floor of the hosted server rather than of the engine: Defold still publishes the older SDK archives, so a self-hosted extender may well build further back — untested here, and not something this SDK promises.
@@ -159,6 +160,7 @@ end)
 
 - `on_pause`: the game must stop its loop, audio and network calls until `on_resume`.
 - `on_resume`: the game may continue. A resume is not guaranteed to follow every pause.
+- `on_exit_requested`: on platforms that support it, the platform is about to close the game and the player has not confirmed leaving. Save synchronously inside the handler (for example with `data_set_string`): the SDK flushes player data right after it returns, and async work started there is not awaited. Register it after `initialize`, like the other events.
 - `on_audio_enabled_change`: `enabled` is a boolean. Keep the game's audio in line with it, and read `session_is_audio_enabled()` once at startup for the initial state.
 - `on_account_dialog_open` / `on_account_dialog_close`: pause while the dialog is open, resume when it closes. Platforms without such a dialog never fire them.
 - Each callback runs once per platform event. Registering again for the same event replaces the previous callback.
@@ -241,6 +243,15 @@ yes2sdk.session_gameplay_stop()
 local locale = yes2sdk.session_get_locale()  -- e.g. "en", "ja", "ru"
 ```
 
+Entry point data is whatever the player arrived with, for example from a shared link or after registering. It is always a table (empty when there is none, or on platforms that do not support it):
+
+```lua
+local entry = yes2sdk.session_get_entry_point_data()
+if entry.invite then
+    show_welcome(entry.invite)
+end
+```
+
 > `analytics_log_level_start` / `_end` can also trigger gameplay start/stop on some platforms. Calling both pairs is safe: the SDK keeps a single owner of the gameplay state, so a start or stop that is already in effect is not sent twice.
 
 ### Data (required)
@@ -260,6 +271,19 @@ if yes2sdk.data_has_key("highScore") then
     yes2sdk.data_delete_key("highScore")
 end
 ```
+
+`data_set_string` is fire and forget: it returns before the platform has stored anything. When a write must survive something that may end the session (for example right before showing a login prompt), use a confirmed write on platforms that support it:
+
+```lua
+yes2sdk.data_set_string_async("progress", "level-5", function(self, success, err)
+    -- success is false when the platform did not confirm the write; err is an error JSON
+end)
+
+yes2sdk.data_flush(function(self, success, err) end)           -- write everything pending
+yes2sdk.player_flush_data(function(self, success, err) end)    -- write pending player_set_data values
+```
+
+`data_set_string_async` and `data_flush` work everywhere (on platforms with local storage they confirm right away). `player_flush_data` reports `FEATURE_NOT_SUPPORTED` where `player_is_data_supported()` is false. In the editor the mock confirms every call on the next frame without storing anything.
 
 ### Analytics (recommended)
 
@@ -285,7 +309,7 @@ yes2sdk.analytics_log_event("boss_defeated", json.encode({ level = 3, time = 42.
 
 These modules add extra player-facing features. They are **not guaranteed** to be available at runtime — guard with a support check and handle the unsupported case gracefully. Don't make your core gameplay depend on them.
 
-Support checks available: `ads_is_interstitial_supported()`, `ads_is_rewarded_supported()`, `auth_is_supported()`, `player_is_data_supported()`, `friends_is_supported()`, `banners_is_supported()`, `score_is_supported()`, `leaderboard_is_supported()`, `stats_is_supported()`, `config_is_supported()`, `review_is_supported()`, `iap_is_supported()`.
+Support checks available: `ads_is_interstitial_supported()`, `ads_is_rewarded_supported()`, `auth_is_supported()`, `player_is_data_supported()`, `friends_is_supported()`, `banners_is_supported()`, `score_is_supported()`, `leaderboard_is_supported()`, `stats_is_supported()`, `config_is_supported()`, `review_is_supported()`, `iap_is_supported()`, `iap_is_subscription_supported()`, `referrals_is_supported()`, `notifications_is_supported()`. (`context_is_supported()` exists too, but it can return false on platforms where sharing works, so do not use it as a gate: see [Context sharing](#context-sharing-image).)
 
 ```lua
 if yes2sdk.ads_is_rewarded_supported() then
@@ -304,6 +328,43 @@ else
     end)
 end
 ```
+
+#### Registration prompt
+
+On platforms that support it, `auth_show_registration_prompt(options)` opens the platform's minimal registration overlay and you draw the rest of the prompt yourself. It returns a handle, or `nil` and an error JSON string (read it with `parse_error`):
+
+```lua
+if not yes2sdk.auth_is_authenticated() then
+    -- save progress first (for example data_set_string_async, then data_flush)
+    local prompt, err = yes2sdk.auth_show_registration_prompt({
+        theme = "dark",
+        message = "Join me in the game! {{registrationCode}} is my code.",
+        data = { reward = "welcome_back" },
+        on_close = function(self) hide_my_prompt_ui() end,
+    })
+    if prompt then
+        -- wire your own buttons:
+        --   prompt.login()  starts the platform login flow (the prompt stays open)
+        --   prompt.close()  closes the prompt (on_close fires once)
+    else
+        print(yes2sdk.parse_error(err).code)
+    end
+end
+```
+
+- Guests only: a registered player gets `INVALID_OPERATION`. Use `auth_is_authenticated()` to tell registered players apart.
+- Save the player's progress before showing the prompt.
+- `message` is optional. When given it must:
+  - not be empty or whitespace only,
+  - be at most 140 characters, counting `{{registrationCode}}` as written and an emoji as 2,
+  - contain `{{registrationCode}}` exactly once and no other `{{...}}` placeholder,
+  - keep the code apart from neighbouring letters, digits or underscores with a space or punctuation.
+
+  Otherwise you get `INVALID_PARAM`. Keep it short and plain: the platform may drop emoji and accented characters from a long pre-filled text.
+- `data` comes back from `session_get_entry_point_data()` after the player registers.
+- `on_close` runs once when the prompt closes, from `prompt.close()` or the platform's own close button. It always runs after the call returns, never inside the `prompt.close()` or `auth_show_registration_prompt` call, and never when `auth_show_registration_prompt` returned an error. `login()` and `close()` return `false` once the prompt is closed.
+- For a custom prompt, the platform's own login reminders must be turned off for the game. That is a per-game platform setting, not an SDK call.
+- Platforms without a registration prompt return `FEATURE_NOT_SUPPORTED`.
 
 ### Friends
 
@@ -427,6 +488,71 @@ end)
 - The catalog: `iap_get_catalog(callback)` returns a JSON array of products (`productId`, `title`, `description`, `imageUri`, `price`, `priceCurrencyCode`, `priceAmount`); `iap_get_product(product_id, callback)` returns one product, or the literal `"null"` when the id is unknown.
 - Failures carry an error code, see [Errors](#errors). In the editor, purchases run against a mock: `mock_purchase_result = fail` in `game.project` tests the failure path (see [Editor Testing](#editor-testing)).
 
+#### Subscriptions
+
+On platforms that support it, players can subscribe to a product. Gate subscription UI on `iap_is_subscription_supported()`.
+
+```lua
+local PREMIUM = "premium_monthly"
+
+if yes2sdk.iap_is_subscription_supported() then
+    yes2sdk.iap_get_subscriptions(function(self, success, subscriptions_json)
+        if not success then return end
+        for _, sub in ipairs(json.decode(subscriptions_json)) do
+            if sub.productId == PREMIUM then
+                if sub.isActive then
+                    grant_premium()                -- already subscribed: never offer it again
+                else
+                    show_subscribe_button(sub)     -- sub.price, sub.billingPeriod, sub.trialEligible
+                end
+            end
+        end
+    end)
+end
+
+-- When the player taps the button:
+yes2sdk.iap_subscribe(PREMIUM, function(self, success, result_json)
+    if success then
+        local result = json.decode(result_json)
+        if result.status == "subscribed" then
+            grant_premium()
+        end                                        -- "cancelled": the player closed the checkout
+    elseif yes2sdk.parse_error(result_json).code ~= "IAP_PURCHASE_CANCELLED" then
+        show_purchase_failed()
+    end
+end)
+```
+
+- **Never re-offer a subscription the player already holds.** Check `isActive` from `iap_get_subscriptions`, or `iap_get_subscription_status(product_id, callback)`, before showing a subscribe button.
+- `iap_subscribe(product_id, callback)` returns `{"status":"subscribed","subscription":{...}}`, or `{"status":"cancelled"}` when the player closed the checkout. A closed checkout can also arrive as a failure with code `IAP_PURCHASE_CANCELLED` (read it with `parse_error`): treat it as a change of mind, not an error. One subscribe at a time: a second call while one is open fails on the next frame with `INVALID_OPERATION`.
+- Subscription JSON fields: `productId`, `title`, `description`, `price`, `priceAmount`, `priceCurrencyCode`, `billingPeriod` (`weekly`, `monthly` or `yearly`), `isActive` (grant the entitlement when true), `trialEligible`, `introOffer` and `retentionOffer` (`{priceAmount, durationPeriods}` or `null`), and where the platform provides them `isSandbox` and `signedRequest`. Verify `signedRequest` on your own server, as for purchases.
+- `iap_get_subscription_status(product_id, callback)` returns `{"isActive":true,"productId":"...","expiresAt":...,"willRenew":true}` (`expiresAt` in Unix milliseconds; `expiresAt` and `willRenew` only when known).
+- `iap_cancel_subscription(product_id, callback)` calls back with `(self, success, cancelled)`: `cancelled` is a boolean on success, the error JSON on failure.
+- `iap_claim_retention_offer(product_id, callback)` claims the subscription's retention offer and returns the updated subscription JSON.
+- In the editor, the mock offers `yes2.mock.premium.monthly` and keeps subscription state for the session; `mock_subscribe_result` selects the checkout outcome (see [Editor Testing](#editor-testing)).
+
+### Context sharing (image)
+
+Share a message with an optional image through the platform's share flow, on platforms that support it.
+
+```lua
+yes2sdk.context_share({
+    intent = "SHARE",              -- "SHARE" (default), "INVITE", "REQUEST" or "CHALLENGE"
+    image = data_url,              -- see below
+    text = "Look at my score!",
+    data = { score = 120 },        -- optional, handed back to whoever opens the share on platforms that support it
+}, function(self, success, err)
+    if not success then
+        print("Share failed: " .. yes2sdk.parse_error(err).code)
+    end
+end)
+```
+
+- `image` is a URL on most platforms. Some platforms require a base64 PNG or a `data:image/png;base64,...` URL, so prefer the data URL. Fields a platform does not use (`image`, `text` or `data`) are ignored.
+- Do not gate `context_share` on `context_is_supported()`: it can return false on platforms where sharing works. Call `context_share` and handle the failure; a `FEATURE_NOT_SUPPORTED` code means the platform has no share.
+- The callback is optional: `yes2sdk.context_share(options)` is a fire-and-forget share.
+- Passing options that are not a table or a JSON string fails the callback with `INVALID_PARAM`.
+
 ### Leaderboard
 
 ```lua
@@ -496,11 +622,71 @@ if yes2sdk.review_is_supported() then
 end
 ```
 
+### Notifications
+
+Schedule a reminder that is shown to the player later, on platforms that support it. Gate it on `notifications_is_supported()`. On some platforms the player must be registered before notifications are delivered.
+
+```lua
+if yes2sdk.notifications_is_supported() then
+    -- One notification per day for the next week. The id is per day, so
+    -- scheduling the sequence again replaces it instead of piling up copies.
+    for day = 1, 7 do
+        yes2sdk.notifications_schedule({
+            id = "daily_" .. day,
+            title = "Your reward is ready",
+            body = "Come back for the day " .. day .. " bonus.",
+            scheduled_in_days = day,
+            image_asset_id = "reward_day_" .. day,
+            cta_text = "Play",
+            priority = "medium",
+            data = { day = day },
+        }, function(self, success, result_json)
+            if not success then
+                print(yes2sdk.parse_error(result_json).message)
+            end
+        end)
+    end
+end
+
+yes2sdk.notifications_cancel("daily_3", function(self, success, err) end)
+yes2sdk.notifications_cancel_all(function(self, success, err) end)
+```
+
+- **Options:** `id`, `title` (required), `body`, `scheduled_in_days` (a whole number from 0 to 7) or `delay_seconds` (use one of them, not both), `cta_text`, `priority` (`low`, `medium`, `high` or `critical`), `image_asset_id` or `image_data_url` (use one of them), `icon_url`, `data`. A JSON string is accepted too and is passed through as is, so use the camelCase names in that case.
+- **Same id replaces.** Scheduling with an id that is already scheduled replaces the earlier notification. Without an id one is generated and returned.
+- **Result:** the callback gets `{"id","title","body","scheduledAt"}` with `scheduledAt` in milliseconds since the epoch. Invalid options fail with `INVALID_PARAM`.
+
+### Referrals
+
+On platforms that support it, a player can invite friends with a referral link and the game can list who joined. Gate it on `referrals_is_supported()`.
+
+```lua
+if yes2sdk.referrals_is_supported() then
+    -- reference is a stable campaign key (required); data reaches the invited player
+    yes2sdk.referrals_share({ reference = "party_mode_v1", data = { from_level = 3 }, title = "Play with me" },
+        function(self, success, result)
+            if success and not json.decode(result).canceled then
+                -- the invite flow was completed
+            end
+        end)
+
+    yes2sdk.referrals_list(function(self, success, result)
+        if success then
+            local list = json.decode(result)
+            -- list.referrals["party_mode_v1"] = { { playerId = "...", joinedAt = "..." }, ... }
+            -- Send list.signedRequest to your server and verify it there before granting any reward.
+        end
+    end)
+end
+```
+
+`referrals_share` options: `reference` (required, a non-empty string), `data` (table), `title`, `text` and `image` (base64 data URL, PNG, JPEG or WebP, at most 2 MB). A missing or empty `reference` fails the callback with `INVALID_PARAM`. Both calls report failures through the usual error JSON (see [Errors](#errors)).
+
 ---
 
 ## Callbacks and script lifetime
 
-- Every async function except the `ads_show_*` calls takes a callback `function(self, success, result)`. Overlapping calls to the same function each get their own callback, with their own result. The exceptions: `iap_purchase`, `iap_consume_purchase` and the `ads_show_*` calls reject a second call while one is open, and `initialize` and `start_game` are called once per session.
+- Every async function except the `ads_show_*` calls takes a callback `function(self, success, result)`. Overlapping calls to the same function each get their own callback, with their own result. The exceptions: `iap_purchase`, `iap_consume_purchase` and the `ads_show_*` calls reject a second call while one is open, `iap_subscribe` fails a second call while one is open with `INVALID_OPERATION`, and `initialize` and `start_game` are called once per session.
 - A call that fails at runtime is reported through its callback with `success == false` and an error string, not raised into your script; only wrong argument types raise. That includes a call the loaded SDK does not provide (see [Errors](#errors)).
 - Call SDK functions from a long-lived script, for example the script of your main collection. The callback and the SDK's own timers belong to the script instance that made the call. A script in a collection proxy that gets unloaded, or that is paused with a time step of 0 while an ad is up, can miss its callbacks or delay the ad's release.
 - If the script instance that made a call is deleted before the response arrives, the response is dropped and a warning is logged. Nothing runs against the deleted instance.
@@ -542,6 +728,7 @@ Common SDK codes games may branch on:
 | `FEATURE_NOT_SUPPORTED`, `PLATFORM_NOT_SUPPORTED` | Not available on this platform. |
 | `NETWORK_FAILURE`, `TIMEOUT` | Transient, usually worth a later retry. |
 | `INVALID_PARAM` | An argument was rejected. |
+| `INVALID_OPERATION` | The call is not allowed right now, for example a second `iap_subscribe` while one is open, or a registration prompt for a player who is already registered. |
 | `PLATFORM_ERROR` | The platform reported a failure. |
 
 `yes2sdk.parse_error(err)` turns the error into a table `{ code = string, message = string, context = string }`. It never raises: a plain string that is not this JSON (for example from an older SDK) comes back as `code = "UNKNOWN_ERROR"` with the string as `message`, and `nil` gives an empty message.
@@ -620,8 +807,13 @@ The native extension is HTML5-only. In the Defold editor, `yes2sdk.*` calls run 
 
 - `initialize` / `start_game` succeed on the next frame
 - **Ads play a timed mock flow** (3s interstitial, 5s rewarded) and then fire the full callback sequence, so pause-resume wiring in `before_ad` / `after_ad` and the reward path in `ad_viewed` are exercised like a real ad
-- **IAP works end to end**: `iap_is_supported()` returns true, `iap_get_catalog` returns a sample catalog, `iap_purchase` accepts any product id and resolves with a realistic purchase payload, and `iap_get_purchases` / `iap_consume_purchase` operate on a session purchase list
-- Other modules keep the one-time-warning stub with sensible defaults
+- Referrals work too: `referrals_is_supported()` returns true, `referrals_share` succeeds and `referrals_list` returns an empty list
+- `context_share` succeeds on the next frame and prints the share, and `context_is_supported()` returns true (real platforms may report false even where sharing works, so do not gate on it)
+- **IAP works end to end**: `iap_is_supported()` returns true, `iap_get_catalog` returns a sample catalog, `iap_purchase` accepts any product id and resolves with a realistic purchase payload, and `iap_get_purchases` / `iap_consume_purchase` operate on a session purchase list. Mock purchases carry `"isSandbox":true`. Subscriptions are mocked too: a sample `yes2.mock.premium.monthly` offer, subscribe / cancel / retention offer / status on session state
+- `auth_show_registration_prompt` returns a handle: `login()` prints a line, `close()` fires `on_close` on the next frame
+- `notifications_is_supported()` returns true, `notifications_schedule` echoes the notification with a computed `scheduledAt`, and `notifications_cancel` / `notifications_cancel_all` succeed
+- Confirmed writes: `data_set_string_async`, `data_flush` and `player_flush_data` succeed on the next frame without storing anything
+- Everything else keeps the one-time-warning stub with sensible defaults
 
 Configure the mock in `game.project` (all keys optional):
 
@@ -631,12 +823,18 @@ mock = 0
 mock_rewarded_result = dismissed
 mock_ad_result = nofill
 mock_purchase_result = fail
+mock_subscribe_result = cancelled
+mock_entry_point_data = {"invite":"friend1"}
+mock_referral_result = canceled
 ```
 
 - `mock = 0` disables the mock entirely (old stub behavior). Default: enabled.
 - `mock_rewarded_result = dismissed` makes rewarded ads fire `ad_dismissed` (no-reward path). Default: `viewed`.
 - `mock_ad_result = nofill` makes ad calls fail with `no_fill`. Default: `normal`.
+- `mock_entry_point_data` is a JSON object string returned by `session_get_entry_point_data()`. Default: `{}`.
 - `mock_purchase_result = fail` makes `iap_purchase` fail with an `IAP_PURCHASE_FAILED` error (see [Errors](#errors)). Default: `success`.
+- `mock_referral_result = canceled` makes `referrals_share` report `{"canceled":true}`. Default: `shared` (reports `{"canceled":false}`).
+- `mock_subscribe_result = cancelled` makes `iap_subscribe` report `{"status":"cancelled"}`; `fail` makes it fail with an `IAP_PURCHASE_FAILED` error. Default: `subscribed`.
 
 The mock is editor/desktop only. HTML5 bundles always use the real platform SDK, and a missing extension in an HTML5 build still prints the loud bundling warning. For richer simulation (specific locales, network conditions), use the QA Inspector in the Yes2Games Dashboard.
 

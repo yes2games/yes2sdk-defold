@@ -27,6 +27,11 @@ int Yes2SDKPlayer::SetData(lua_State* L) {
     Yes2SDK_player_setData(dataJson, id, Yes2SDKRequests::Complete);
     return 0;
 }
+int Yes2SDKPlayer::FlushData(lua_State* L) {
+    int id = Yes2SDKRequests::Register(L, 1, "player_flush_data");
+    Yes2SDK_player_flushData(id, Yes2SDKRequests::Complete);
+    return 0;
+}
 int Yes2SDKPlayer::GetUniqueId(lua_State* L) {
     int id = Yes2SDKRequests::Register(L, 1, "player_get_unique_id");
     Yes2SDK_player_getUniqueId(id, Yes2SDKRequests::Complete);

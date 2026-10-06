@@ -1,5 +1,6 @@
 #pragma once
 #include <dmsdk/sdk.h>
+#include "yes2sdk_requests.h"
 #if defined(DM_PLATFORM_HTML5)
 class Yes2SDKData {
 public:
@@ -12,6 +13,8 @@ public:
     static int HasKey(lua_State* L);
     static int DeleteKey(lua_State* L);
     static int DeleteAll(lua_State* L);
+    static int SetStringAsync(lua_State* L);
+    static int Flush(lua_State* L);
 };
 extern "C" {
     int Yes2SDK_data_getInt(const char* key, int defaultValue);
@@ -23,5 +26,7 @@ extern "C" {
     int Yes2SDK_data_hasKey(const char* key);
     void Yes2SDK_data_deleteKey(const char* key);
     void Yes2SDK_data_deleteAll();
+    void Yes2SDK_data_setStringAsync(const char* key, const char* value, int requestId, Yes2SDKRequests::OnCompleteCallback callback);
+    void Yes2SDK_data_flush(int requestId, Yes2SDKRequests::OnCompleteCallback callback);
 }
 #endif

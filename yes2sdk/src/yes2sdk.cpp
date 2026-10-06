@@ -14,6 +14,9 @@
 #include "yes2sdk_config.h"
 #include "yes2sdk_review.h"
 #include "yes2sdk_iap.h"
+#include "yes2sdk_referrals.h"
+#include "yes2sdk_notifications.h"
+#include "yes2sdk_context.h"
 #include "yes2sdk_requests.h"
 #include "luautils.h"
 #include <dmsdk/sdk.h>
@@ -31,6 +34,7 @@ lua_Listener onStartGameListener;
 // lifetime of the game session (YouTube cert reqs #14, #21, #22).
 lua_Listener onPauseListener;
 lua_Listener onResumeListener;
+lua_Listener onExitRequestedListener;
 lua_Listener onAudioEnabledChangeListener;
 // Yandex account-selection dialog open / close (payload-free, like pause/resume).
 lua_Listener onAccountDialogOpenListener;
@@ -139,6 +143,19 @@ void Yes2SDK::OnResumeFromJs()
     assert(top == lua_gettop(L));
 }
 
+void Yes2SDK::OnExitRequestedFromJs()
+{
+    lua_State *L = onExitRequestedListener.m_L;
+    if (!L) return;
+    int top = lua_gettop(L);
+
+    lua_pushlistener(L, onExitRequestedListener);
+    int ret = lua_pcall(L, 1, 0, 0);
+    if (ret != 0) { lua_logpcallerror(L, "on_exit_requested"); }
+
+    assert(top == lua_gettop(L));
+}
+
 void Yes2SDK::OnAudioEnabledChangeFromJs(const int enabled)
 {
     lua_State *L = onAudioEnabledChangeListener.m_L;
@@ -197,6 +214,15 @@ int Yes2SDK::OnResume(lua_State *L)
     return 0;
 }
 
+int Yes2SDK::OnExitRequested(lua_State *L)
+{
+    int top = lua_gettop(L);
+    luaL_checklistener(L, 1, onExitRequestedListener);
+    Yes2SDK_onExitRequested(Yes2SDK::OnExitRequestedFromJs);
+    assert(top == lua_gettop(L));
+    return 0;
+}
+
 int Yes2SDK::OnAudioEnabledChange(lua_State *L)
 {
     int top = lua_gettop(L);
@@ -233,6 +259,7 @@ static const luaL_reg Module_methods[] = {
     // Lifecycle events (YouTube cert reqs #14, #21, #22)
     {"on_pause", Yes2SDK::OnPause},
     {"on_resume", Yes2SDK::OnResume},
+    {"on_exit_requested", Yes2SDK::OnExitRequested},
     {"on_audio_enabled_change", Yes2SDK::OnAudioEnabledChange},
     {"on_account_dialog_open", Yes2SDK::OnAccountDialogOpen},
     {"on_account_dialog_close", Yes2SDK::OnAccountDialogClose},
@@ -250,6 +277,7 @@ static const luaL_reg Module_methods[] = {
     {"session_get_locale", Yes2SDKSession::GetLocale},
     {"session_is_audio_enabled", Yes2SDKSession::IsAudioEnabled},
     {"session_get_device_info", Yes2SDKSession::GetDeviceInfo},
+    {"session_get_entry_point_data", Yes2SDKSession::GetEntryPointData},
 
     // Analytics
     {"analytics_log_level_start", Yes2SDKAnalytics::LogLevelStart},
@@ -277,6 +305,10 @@ static const luaL_reg Module_methods[] = {
     {"auth_is_authenticated", Yes2SDKAuth::IsAuthenticated},
     {"auth_sign_in", Yes2SDKAuth::SignIn},
     {"auth_is_supported", Yes2SDKAuth::IsSupported},
+    // Auth: game-drawn registration prompt
+    {"auth_show_registration_prompt", Yes2SDKAuth::ShowRegistrationPrompt},
+    {"auth_registration_prompt_login", Yes2SDKAuth::RegistrationPromptLogin},
+    {"auth_registration_prompt_close", Yes2SDKAuth::RegistrationPromptClose},
 
     // Data (key-value storage)
     {"data_get_int", Yes2SDKData::GetInt},
@@ -288,6 +320,11 @@ static const luaL_reg Module_methods[] = {
     {"data_has_key", Yes2SDKData::HasKey},
     {"data_delete_key", Yes2SDKData::DeleteKey},
     {"data_delete_all", Yes2SDKData::DeleteAll},
+
+    // Confirmed writes and flush
+    {"data_set_string_async", Yes2SDKData::SetStringAsync},
+    {"data_flush", Yes2SDKData::Flush},
+    {"player_flush_data", Yes2SDKPlayer::FlushData},
 
     // Game
     {"game_happy_time", Yes2SDKGame::HappyTime},
@@ -341,6 +378,26 @@ static const luaL_reg Module_methods[] = {
     {"iap_get_purchases", Yes2SDKIap::GetPurchases},
     {"iap_consume_purchase", Yes2SDKIap::ConsumePurchase},
     {"iap_is_supported", Yes2SDKIap::IsSupported},
+
+    // Referrals
+    {"referrals_share", Yes2SDKReferrals::Share},
+    {"referrals_list", Yes2SDKReferrals::List},
+    {"referrals_is_supported", Yes2SDKReferrals::IsSupported},
+    // Notifications
+    {"notifications_schedule", Yes2SDKNotifications::Schedule},
+    {"notifications_cancel", Yes2SDKNotifications::Cancel},
+    {"notifications_cancel_all", Yes2SDKNotifications::CancelAll},
+    {"notifications_is_supported", Yes2SDKNotifications::IsSupported},
+    // Context (image share)
+    {"context_share", Yes2SDKContext::Share},
+    {"context_is_supported", Yes2SDKContext::IsSupported},
+    // IAP subscriptions
+    {"iap_get_subscriptions", Yes2SDKIap::GetSubscriptions},
+    {"iap_subscribe", Yes2SDKIap::Subscribe},
+    {"iap_cancel_subscription", Yes2SDKIap::CancelSubscription},
+    {"iap_claim_retention_offer", Yes2SDKIap::ClaimRetentionOffer},
+    {"iap_get_subscription_status", Yes2SDKIap::GetSubscriptionStatus},
+    {"iap_is_subscription_supported", Yes2SDKIap::IsSubscriptionSupported},
 
     {0, 0}
 };

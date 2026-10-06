@@ -10,6 +10,13 @@ public:
     static int GetPurchases(lua_State* L);
     static int ConsumePurchase(lua_State* L);
     static int IsSupported(lua_State* L);
+    // Subscriptions
+    static int GetSubscriptions(lua_State* L);
+    static int Subscribe(lua_State* L);
+    static int CancelSubscription(lua_State* L);
+    static int ClaimRetentionOffer(lua_State* L);
+    static int GetSubscriptionStatus(lua_State* L);
+    static int IsSubscriptionSupported(lua_State* L);
 };
 extern "C" {
     void Yes2SDK_iap_getCatalog(int requestId, Yes2SDKRequests::OnCompleteCallback callback);
@@ -18,5 +25,11 @@ extern "C" {
     void Yes2SDK_iap_getPurchases(int requestId, Yes2SDKRequests::OnCompleteCallback callback);
     void Yes2SDK_iap_consumePurchase(const char* purchaseToken, int requestId, Yes2SDKRequests::OnCompleteCallback callback);
     int Yes2SDK_iap_isSupported();
+    void Yes2SDK_iap_getSubscriptions(int requestId, Yes2SDKRequests::OnCompleteCallback callback);
+    void Yes2SDK_iap_subscribe(const char* productId, int requestId, Yes2SDKRequests::OnCompleteCallback callback);
+    void Yes2SDK_iap_cancelSubscription(const char* productId, int requestId, Yes2SDKRequests::OnCompleteCallback callback);
+    void Yes2SDK_iap_claimRetentionOffer(const char* productId, int requestId, Yes2SDKRequests::OnCompleteCallback callback);
+    void Yes2SDK_iap_getSubscriptionStatus(const char* productId, int requestId, Yes2SDKRequests::OnCompleteCallback callback);
+    int Yes2SDK_iap_isSubscriptionSupported();
 }
 #endif

@@ -140,19 +140,21 @@ var Yes2SDKLib = {
         // through the saved pointer for the lifetime of the session.
         _onPausePtr: null,
         _onResumePtr: null,
+        _onExitRequestedPtr: null,
         _onAudioEnabledChangePtr: null,
         _onAccountDialogOpenPtr: null,
         _onAccountDialogClosePtr: null,
         _pauseWired: false,
         _resumeWired: false,
+        _exitRequestedWired: false,
         _audioWired: false,
         _accountDialogOpenWired: false,
         _accountDialogCloseWired: false,
 
         // Minimum injected Core runtime this wrapper build is compatible with.
-        // Distinct from the wrapper's own version (yes2sdk.cpp VERSION) — this is the
-        // Core floor, matching the dashboard's MIN_CORE_BY_ENGINE for Defold.
-        REQUIRED_CORE_VERSION: '2.2.0',
+        // Distinct from the wrapper's own version (yes2sdk.cpp VERSION): this is the
+        // oldest Yes2SDK runtime this build supports.
+        REQUIRED_CORE_VERSION: '2.10.0',
 
         // Compare two semver strings on major.minor.patch (pre-release/build metadata
         // ignored). Returns 1 if a > b, -1 if a < b, 0 if equal.
@@ -282,6 +284,24 @@ var Yes2SDKLib = {
             Yes2SDKUtils._resumeWired = true;
         } else {
             console.warn("[Yes2SDK] on_resume registered before Yes2SDK.on is available — call M.on_resume after M.initialize completes.");
+        }
+    },
+
+    // Exit request: the player has not confirmed leaving yet. The handler runs
+    // synchronously end to end (no timer, no router) so the game's saves finish
+    // before the SDK flushes player data.
+    Yes2SDK_onExitRequested: function (callback) {
+        Yes2SDKUtils._onExitRequestedPtr = callback;
+        if (Yes2SDKUtils._exitRequestedWired) return;
+        if (window.Yes2SDK && typeof window.Yes2SDK.on === 'function') {
+            window.Yes2SDK.on("exitRequested", function () {
+                if (Yes2SDKUtils._onExitRequestedPtr) {
+                    {{{ makeDynCall("v", "Yes2SDKUtils._onExitRequestedPtr") }}}();
+                }
+            });
+            Yes2SDKUtils._exitRequestedWired = true;
+        } else {
+            console.warn("[Yes2SDK] on_exit_requested registered before Yes2SDK.on is available, call M.on_exit_requested after M.initialize completes.");
         }
     },
 

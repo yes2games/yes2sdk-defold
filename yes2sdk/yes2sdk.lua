@@ -2,8 +2,24 @@
 -- @module yes2sdk_api
 
 -- Overlapping calls to the same async function each get their own callback. Exceptions:
--- iap_purchase, iap_consume_purchase and ads_show_* reject a second call while one is open;
+-- iap_purchase, iap_consume_purchase, iap_subscribe and ads_show_* reject a second call while one is open;
 -- initialize and start_game are once per session.
+
+-- Fail an async call of the warn stub (extension not loaded): the callback gets
+-- NOT_INITIALIZED on the next frame, never synchronously. `context` names the SDK
+-- call as "<module>.<method>". Last resort: if no timer can be created
+-- (timer.delay raises, or returns timer.INVALID_TIMER_HANDLE), the callback runs
+-- synchronously with a nil self rather than never being delivered.
+local function not_loaded_async(callback, context)
+  if not callback then return end
+  local err = json.encode({
+    code = "NOT_INITIALIZED",
+    message = "Yes2SDK extension not loaded",
+    context = context,
+  })
+  local ok, handle = pcall(timer.delay, 0, false, function(tself) callback(tself, false, err) end)
+  if not ok or handle == timer.INVALID_TIMER_HANDLE then callback(nil, false, err) end
+end
 
 -- Guard: if the native extension isn't loaded (Project > Build instead of Bundle),
 -- create a stub that logs a warning and no-ops all SDK calls.
@@ -21,6 +37,12 @@ if not sdk then
       return function() warn() end
     end
   })
+  -- Async calls that must not leave the caller waiting: warn, then fail the
+  -- callback next frame with NOT_INITIALIZED.
+  local function stub_fail(callback, context)
+    warn()
+    not_loaded_async(callback, context)
+  end
   -- Override functions that return values with sensible defaults
   function sdk.get_platform() warn() return "editor" end
   function sdk.session_get_locale() warn() return "en" end
@@ -41,12 +63,40 @@ if not sdk then
   function sdk.config_is_supported() warn() return false end
   function sdk.review_is_supported() warn() return false end
   function sdk.iap_is_supported() warn() return false end
+  function sdk.context_is_supported() warn() return false end
+  function sdk.context_share(options_json, callback) stub_fail(callback, "context.shareAsync") end
+  -- Notifications: unsupported, and the async calls fail instead of going silent.
+  function sdk.notifications_is_supported() warn() return false end
+  function sdk.notifications_schedule(options, callback) stub_fail(callback, "notifications.scheduleAsync") end
+  function sdk.notifications_cancel(id, callback) stub_fail(callback, "notifications.cancelAsync") end
+  function sdk.notifications_cancel_all(callback) stub_fail(callback, "notifications.cancelAllAsync") end
+  -- IAP subscriptions: unsupported, and every async call fails.
+  function sdk.iap_is_subscription_supported() warn() return false end
+  function sdk.iap_get_subscriptions(callback) stub_fail(callback, "iap.getSubscriptionsAsync") end
+  function sdk.iap_subscribe(product_id, callback) stub_fail(callback, "iap.subscribeAsync") end
+  function sdk.iap_cancel_subscription(product_id, callback) stub_fail(callback, "iap.cancelSubscriptionAsync") end
+  function sdk.iap_claim_retention_offer(product_id, callback) stub_fail(callback, "iap.claimRetentionOfferAsync") end
+  function sdk.iap_get_subscription_status(product_id, callback) stub_fail(callback, "iap.getSubscriptionStatusAsync") end
+  -- Confirmed writes: they cannot reach a platform, so the callback fails.
+  function sdk.data_set_string_async(key, value, callback) stub_fail(callback, "data.setStringAsync") end
+  function sdk.data_flush(callback) stub_fail(callback, "data.flushAsync") end
+  function sdk.player_flush_data(callback) stub_fail(callback, "player.flushDataAsync") end
   function sdk.ads_is_rewarded_ad_available() warn() return false end
   function sdk.ads_is_interstitial_supported() warn() return false end
   function sdk.ads_is_rewarded_supported() warn() return false end
   function sdk.auth_is_supported() warn() return false end
   function sdk.player_is_data_supported() warn() return false end
   function sdk.session_is_audio_enabled() warn() return true end
+  function sdk.session_get_entry_point_data() warn() return "{}" end
+  -- Registration prompt: no extension, no prompt.
+  function sdk.auth_show_registration_prompt() warn() return '{"error":{"code":"FEATURE_NOT_SUPPORTED","message":"Registration prompt needs the native extension (HTML5 bundle)","context":"auth.showRegistrationPrompt"}}' end
+  function sdk.auth_registration_prompt_login() warn() return false end
+  function sdk.auth_registration_prompt_close() warn() return false end
+
+  -- Referrals: unsupported, and async calls fail.
+  function sdk.referrals_is_supported() warn() return false end
+  function sdk.referrals_share(options_json, callback) stub_fail(callback, "referrals.shareAsync") end
+  function sdk.referrals_list(callback) stub_fail(callback, "referrals.listAsync") end
 
   -- ── Editor mock (desktop builds only) ──
   --
@@ -63,6 +113,9 @@ if not sdk then
   --   mock_rewarded_result = viewed   <- or: dismissed (no-reward path)
   --   mock_ad_result = normal         <- or: nofill (ads fail, no inventory)
   --   mock_purchase_result = success  <- or: fail
+  --   mock_referral_result = shared   <- reports {"canceled":false}; or: canceled ({"canceled":true})
+  --   mock_subscribe_result = subscribed  <- or: cancelled, fail
+  --   mock_entry_point_data = {}      <- JSON object string for session_get_entry_point_data()
   --
   -- HTML5 keeps the plain warn stub: a missing extension there is a bundling
   -- mistake the developer must see, not something to paper over.
@@ -93,6 +146,37 @@ if not sdk then
       if callback then next_frame(function(tself) callback(tself, true, nil) end) end
     end
     function sdk.set_loading_progress(progress) end
+    -- Exit requests never happen in the editor, so registering is a quiet no-op.
+    function sdk.on_exit_requested(callback) end
+
+    -- Entry point data: mock_entry_point_data in game.project is a JSON object string.
+    function sdk.session_get_entry_point_data()
+      return mock_config("mock_entry_point_data", "{}")
+    end
+
+    -- Registration prompt: always opens (draw your own prompt UI); login prints,
+    -- close fires on_close on the next frame and frees the handle.
+    local mock_prompts = {}
+    local mock_prompt_next = 0
+    function sdk.auth_show_registration_prompt(options_json, on_close)
+      mock_prompt_next = mock_prompt_next + 1
+      mock_prompts[mock_prompt_next] = on_close
+      print("[Yes2SDK] Mock: registration prompt shown (handle " .. mock_prompt_next .. ")")
+      return '{"handle":' .. mock_prompt_next .. '}'
+    end
+    function sdk.auth_registration_prompt_login(handle)
+      if not mock_prompts[handle] then return false end
+      print("[Yes2SDK] Mock: registration prompt login (the platform login flow does not run in the editor)")
+      return true
+    end
+    function sdk.auth_registration_prompt_close(handle)
+      local on_close = mock_prompts[handle]
+      if not on_close then return false end
+      mock_prompts[handle] = nil
+      print("[Yes2SDK] Mock: registration prompt closed (handle " .. tostring(handle) .. ")")
+      next_frame(function(tself) on_close(tself, true, nil) end)
+      return true
+    end
 
     -- Ads: delayed flows so pause/resume wiring is exercised like a real ad.
     -- Durations match the Unity SDK's mock ad popup.
@@ -162,7 +246,7 @@ if not sdk then
       local json = '{"purchaseToken":"' .. token
         .. '","productId":"' .. json_escape(product_id)
         .. '","paymentId":"mock-payment-' .. tostring(mock_payment_counter)
-        .. '","purchaseTime":"' .. os.date("!%Y-%m-%dT%H:%M:%SZ") .. '"'
+        .. '","purchaseTime":"' .. os.date("!%Y-%m-%dT%H:%M:%SZ") .. '","isSandbox":true'
       if developer_payload and developer_payload ~= "" then
         json = json .. ',"developerPayload":"' .. json_escape(developer_payload) .. '"'
       end
@@ -214,6 +298,17 @@ if not sdk then
       if callback then next_frame(function(tself) callback(tself, true, purchases) end) end
     end
 
+    -- Confirmed writes: nothing is stored in the editor, the calls just confirm.
+    function sdk.data_set_string_async(key, value, callback)
+      if callback then next_frame(function(tself) callback(tself, true, nil) end) end
+    end
+    function sdk.data_flush(callback)
+      if callback then next_frame(function(tself) callback(tself, true, nil) end) end
+    end
+    function sdk.player_flush_data(callback)
+      if callback then next_frame(function(tself) callback(tself, true, nil) end) end
+    end
+
     function sdk.iap_consume_purchase(purchase_token, callback)
       for i, purchase in ipairs(mock_purchases) do
         if purchase.token == purchase_token then
@@ -223,6 +318,150 @@ if not sdk then
       end
       print("[Yes2SDK] Mock: iap_consume_purchase succeeded")
       if callback then next_frame(function(tself) callback(tself, true, nil) end) end
+    end
+
+    -- Referrals: sharing succeeds (or reports canceled), the list is empty.
+    function sdk.referrals_is_supported() return true end
+
+    function sdk.referrals_share(options_json, callback)
+      local canceled = mock_config("mock_referral_result", "shared") == "canceled"
+      print("[Yes2SDK] Mock: referrals_share " .. (canceled and "canceled (mock_referral_result = canceled)" or "succeeding"))
+      local result = canceled and '{"canceled":true}' or '{"canceled":false}'
+      if callback then next_frame(function(tself) callback(tself, true, result) end) end
+    end
+
+    function sdk.referrals_list(callback)
+      if callback then
+        next_frame(function(tself) callback(tself, true, '{"referrals":{},"signedRequest":"mock"}') end)
+      end
+    end
+
+    -- Notifications: schedule echoes the notification with a computed time.
+    local mock_notification_count = 0
+    function sdk.notifications_is_supported() return true end
+    function sdk.notifications_schedule(options_json, callback)
+      local ok, options = pcall(json.decode, options_json or "{}")
+      if not ok or type(options) ~= "table" then options = {} end
+      mock_notification_count = mock_notification_count + 1
+      local delay_ms = 0
+      if options.delaySeconds then
+        delay_ms = options.delaySeconds * 1000
+      elseif options.scheduledInDays then
+        delay_ms = options.scheduledInDays * 86400 * 1000
+      end
+      local result = json.encode({
+        id = options.id or ("mock-notification-" .. mock_notification_count),
+        title = options.title or "",
+        body = options.body or "",
+        scheduledAt = os.time() * 1000 + delay_ms,
+      })
+      print("[Yes2SDK] Mock: notifications_schedule succeeded")
+      if callback then next_frame(function(tself) callback(tself, true, result) end) end
+    end
+    function sdk.notifications_cancel(id, callback)
+      print("[Yes2SDK] Mock: notifications_cancel succeeded")
+      if callback then next_frame(function(tself) callback(tself, true, nil) end) end
+    end
+    function sdk.notifications_cancel_all(callback)
+      print("[Yes2SDK] Mock: notifications_cancel_all succeeded")
+      if callback then next_frame(function(tself) callback(tself, true, nil) end) end
+    end
+
+    -- Context: image share succeeds on the next frame and prints the share.
+    function sdk.context_is_supported() return true end
+
+    function sdk.context_share(options_json, callback)
+      print("[Yes2SDK] Mock: context_share succeeded (options: " .. tostring(options_json) .. ")")
+      if callback then next_frame(function(tself) callback(tself, true, nil) end) end
+    end
+
+    -- IAP subscriptions: one sample offer, and any product id can be subscribed
+    -- to. Active state lasts for the current session only.
+    local MOCK_SUBSCRIPTION_IDS = { "yes2.mock.premium.monthly" }
+    local mock_subscription_active = { ["yes2.mock.premium.monthly"] = false }
+
+    local function mock_subscription(product_id)
+      return {
+        productId = product_id,
+        title = "Premium (monthly)",
+        description = "Mock subscription product.",
+        price = "4.99 USD",
+        priceAmount = 499,
+        priceCurrencyCode = "USD",
+        billingPeriod = "monthly",
+        isActive = mock_subscription_active[product_id] == true,
+        trialEligible = false,
+        introOffer = json.null,
+        retentionOffer = { priceAmount = 249, durationPeriods = 1 },
+        isSandbox = true,
+      }
+    end
+
+    local function mock_set_subscription(product_id, active)
+      if mock_subscription_active[product_id] == nil then
+        table.insert(MOCK_SUBSCRIPTION_IDS, product_id)
+      end
+      mock_subscription_active[product_id] = active
+    end
+
+    function sdk.iap_is_subscription_supported() return true end
+
+    function sdk.iap_get_subscriptions(callback)
+      local list = {}
+      for i, id in ipairs(MOCK_SUBSCRIPTION_IDS) do list[i] = mock_subscription(id) end
+      local text = #list > 0 and json.encode(list) or "[]"
+      if callback then next_frame(function(tself) callback(tself, true, text) end) end
+    end
+
+    function sdk.iap_subscribe(product_id, callback)
+      product_id = tostring(product_id)
+      local mode = mock_config("mock_subscribe_result", "subscribed")
+      local success, payload
+      if mode == "fail" then
+        print("[Yes2SDK] Mock: iap_subscribe('" .. product_id .. "') failing (mock_subscribe_result = fail)")
+        success = false
+        payload = json.encode({
+          code = "IAP_PURCHASE_FAILED",
+          message = "Simulated subscription failure (mock)",
+          context = "iap.subscribeAsync",
+        })
+      elseif mode == "cancelled" then
+        print("[Yes2SDK] Mock: iap_subscribe('" .. product_id .. "') closed by the player (mock_subscribe_result = cancelled)")
+        success, payload = true, '{"status":"cancelled"}'
+      else
+        mock_set_subscription(product_id, true)
+        print("[Yes2SDK] Mock: iap_subscribe('" .. product_id .. "') subscribed")
+        success = true
+        payload = json.encode({ status = "subscribed", subscription = mock_subscription(product_id) })
+      end
+      if callback then next_frame(function(tself) callback(tself, success, payload) end) end
+    end
+
+    function sdk.iap_cancel_subscription(product_id, callback)
+      product_id = tostring(product_id)
+      mock_set_subscription(product_id, false)
+      print("[Yes2SDK] Mock: iap_cancel_subscription('" .. product_id .. "') cancelled")
+      if callback then next_frame(function(tself) callback(tself, true, "true") end) end
+    end
+
+    function sdk.iap_claim_retention_offer(product_id, callback)
+      product_id = tostring(product_id)
+      mock_set_subscription(product_id, true)
+      print("[Yes2SDK] Mock: iap_claim_retention_offer('" .. product_id .. "') claimed")
+      local text = json.encode(mock_subscription(product_id))
+      if callback then next_frame(function(tself) callback(tself, true, text) end) end
+    end
+
+    function sdk.iap_get_subscription_status(product_id, callback)
+      product_id = tostring(product_id)
+      local active = mock_subscription_active[product_id] == true
+      local status = { isActive = active, productId = product_id, willRenew = active }
+      if active then
+        -- 30 days from now, in milliseconds.
+        status.expiresAt = (os.time() + 30 * 24 * 60 * 60) * 1000
+      end
+      local text = json.encode(status)
+      if callback then next_frame(function(tself) callback(tself, true, text) end) end
     end
   end
 end
@@ -296,6 +535,56 @@ function M.parse_error(err)
   return result
 end
 
+-- ── Option encoding ──
+
+-- Build the error JSON string every failure carries (see M.parse_error).
+local function invalid_param(message, context)
+  return json.encode({
+    code = "INVALID_PARAM",
+    message = message,
+    context = context or "",
+  })
+end
+
+-- Turn an options argument into the JSON string the native layer takes.
+-- table -> json.encode (an empty table gives nil); string -> as is (empty gives
+-- nil); nil -> nil. Anything else, or a table json.encode cannot handle (a
+-- function value, a cycle), returns nil, err_json (code INVALID_PARAM).
+-- `context` is optional and lands in the error JSON, e.g. "session.start".
+-- Only a top-level empty table becomes nil; a nested empty table is encoded
+-- as is and may come out as [] rather than {} (empty tables carry no type).
+local function encode_options(v, context)
+  local kind = type(v)
+  if kind == "nil" then return nil end
+  if kind == "table" then
+    if next(v) == nil then return nil end
+    local ok, encoded = pcall(json.encode, v)
+    if not ok then
+      return nil, invalid_param("options could not be encoded as JSON: " .. tostring(encoded), context)
+    end
+    return encoded
+  end
+  if kind == "string" then
+    if v == "" then return nil end
+    return v
+  end
+  return nil, invalid_param("options must be a table or a JSON string, got " .. kind, context)
+end
+
+-- Deliver callback(self, false, err_json) on the next frame. Async APIs never
+-- call back synchronously on a validation failure. The timer is created in the
+-- calling script's context, so the callback receives the right self.
+-- Last resort: if no timer can be created (timer.delay raises, or returns
+-- timer.INVALID_TIMER_HANDLE), the callback runs synchronously with a nil self
+-- rather than never being delivered.
+local function fail_async(callback, err_json)
+  if not callback then return end
+  local ok, handle = pcall(timer.delay, 0, false, function(tself) callback(tself, false, err_json) end)
+  if not ok or handle == timer.INVALID_TIMER_HANDLE then
+    callback(nil, false, err_json)
+  end
+end
+
 -- ── Core (mandatory) ──
 
 function M.initialize(callback)
@@ -335,6 +624,15 @@ end
 -- Callback signature: function(self)
 function M.on_resume(callback)
   sdk.on_resume(callback)
+end
+
+--- Subscribe to the platform asking the game to exit.
+-- The player has NOT confirmed leaving yet. Save synchronously inside the handler
+-- (data_set_string and friends): the SDK flushes player data right after it returns.
+-- Async work started here is not awaited. Register after M.initialize has called back.
+-- Callback signature: function(self)
+function M.on_exit_requested(callback)
+  sdk.on_exit_requested(callback)
 end
 
 --- Subscribe to platform audio mute/unmute changes.
@@ -865,6 +1163,85 @@ function M.auth_is_supported()
   return sdk.auth_is_supported()
 end
 
+-- ── Registration prompt ──
+
+local _PROMPT_CONTEXT = "auth.showRegistrationPrompt"
+
+--- Ask a guest to register, with your own prompt UI.
+-- On platforms that support it, this opens the platform's minimal registration
+-- overlay and returns a handle whose functions you wire to your own buttons:
+-- handle.login() starts the platform login flow (the handle stays open) and
+-- handle.close() closes the prompt (the handle is freed). Both return true when
+-- the handle was still open, false otherwise.
+--
+-- options (table or JSON string, all optional):
+--   theme    "light" or "dark"
+--   message  text the player's messaging app is pre-filled with. It must not be
+--            empty or whitespace only, be at most 140 characters (the
+--            placeholder counts as written, an emoji counts as 2), contain
+--            {{registrationCode}} exactly once and no other {{...}}
+--            placeholder, and keep the code apart from neighbouring letters,
+--            digits or underscores with a space or punctuation.
+--   data     table, available from session_get_entry_point_data() after the
+--            player registers
+--   on_close function(self) called once when the prompt closes, by close() or
+--            by the platform's own close button. It runs after the call returns,
+--            never inside close() or this call, and never after an error return
+--
+-- Guests only: check auth_is_authenticated() first, a registered player gets an
+-- INVALID_OPERATION error. Save the player's progress before showing it. For a
+-- custom prompt the platform's own login reminders must be turned off for the
+-- game; that is a per-game platform setting, not an SDK call.
+--
+-- Returns handle, or nil and an error JSON string (see M.parse_error): codes
+-- FEATURE_NOT_SUPPORTED, INVALID_OPERATION, INVALID_PARAM (bad options or
+-- message), NOT_INITIALIZED. Synchronous: nothing is called back on failure.
+function M.auth_show_registration_prompt(options)
+  local on_close
+  local rest = options
+  if type(options) == "table" then
+    on_close = options.on_close
+    if on_close ~= nil and type(on_close) ~= "function" then
+      return nil, invalid_param("on_close must be a function, got " .. type(on_close), _PROMPT_CONTEXT)
+    end
+    rest = {}
+    for k, v in pairs(options) do
+      if k ~= "on_close" then rest[k] = v end
+    end
+  end
+  local encoded, err = encode_options(rest, _PROMPT_CONTEXT)
+  if err then return nil, err end
+
+  local raw = sdk.auth_show_registration_prompt(encoded, function(self)
+    if on_close then on_close(self) end
+  end)
+  local decoded
+  if type(raw) == "string" then
+    local ok, value = pcall(json.decode, raw)
+    if ok and type(value) == "table" then decoded = value end
+  end
+  if decoded and type(decoded.handle) == "number" then
+    local id = decoded.handle
+    return {
+      login = function() return sdk.auth_registration_prompt_login(id) == true end,
+      close = function() return sdk.auth_registration_prompt_close(id) == true end,
+    }
+  end
+  local e = decoded and decoded.error
+  if type(e) == "table" then
+    return nil, json.encode({
+      code = _error_field(e, "code") or "UNKNOWN_ERROR",
+      message = _error_field(e, "message") or "",
+      context = _error_field(e, "context") or _PROMPT_CONTEXT,
+    })
+  end
+  return nil, json.encode({
+    code = "UNKNOWN_ERROR",
+    message = "unexpected result: " .. tostring(raw),
+    context = _PROMPT_CONTEXT,
+  })
+end
+
 -- ── Data (key-value storage) ──
 
 function M.data_get_int(key, default)
@@ -1187,6 +1564,268 @@ end
 --- Check whether in-app purchases are supported on the current platform.
 function M.iap_is_supported()
   return sdk.iap_is_supported()
+end
+
+
+-- ── Context (image share) ──
+
+--- Share a message with an optional image through the platform's share flow.
+-- @param options Table or JSON string: { intent = "SHARE" (default) | "INVITE" | "REQUEST" |
+--   "CHALLENGE", image = string, text = string, data = table }. `image` is a URL on most
+--   platforms; some require a base64 PNG or a "data:image/png;base64,..." URL, so prefer the
+--   data URL. Pass nil for a plain share.
+-- Callback signature: function(self, success, err) where err is nil on success.
+-- Fields a platform does not use are ignored. Do not gate this call on context_is_supported(),
+-- which can be false where sharing works: call it and handle the failure (see M.parse_error);
+-- FEATURE_NOT_SUPPORTED means the platform has no share. The callback is optional.
+function M.context_share(options, callback)
+  if callback == nil then callback = function() end end
+  local to_encode = options
+  if type(options) == "table" then
+    to_encode = {}
+    for k, v in pairs(options) do to_encode[k] = v end
+    if to_encode.intent == nil then to_encode.intent = "SHARE" end
+  elseif options == nil then
+    to_encode = { intent = "SHARE" }
+  end
+  local encoded, err = encode_options(to_encode, "context.shareAsync")
+  if err then
+    fail_async(callback, err)
+    return
+  end
+  sdk.context_share(encoded or "", callback)
+end
+
+--- Hint only: can be false on platforms where sharing works. Do not gate context_share on it.
+function M.context_is_supported()
+  return sdk.context_is_supported()
+end
+
+-- ── Notifications ──
+
+-- Public snake_case option names to the camelCase names the SDK takes. Keys not
+-- listed here (id, title, body, priority, data, anything newer) pass through
+-- unchanged.
+local _NOTIFICATION_KEYS = {
+  delay_seconds = "delaySeconds",
+  scheduled_in_days = "scheduledInDays",
+  cta_text = "ctaText",
+  image_asset_id = "imageAssetId",
+  image_data_url = "imageDataUrl",
+  icon_url = "iconUrl",
+}
+
+--- Schedule a notification for later.
+-- @param options Table (or a JSON string, passed through as is with the SDK's
+--   own camelCase names): { id, title (required), body, delay_seconds or
+--   scheduled_in_days (integer 0 to 7, not both), cta_text, priority
+--   ("low"|"medium"|"high"|"critical"), image_asset_id or image_data_url,
+--   icon_url, data }. The SDK validates the values and reports INVALID_PARAM.
+-- Scheduling again with the same id replaces the earlier notification.
+-- Callback signature: function(self, success, result_json) where result_json is
+-- '{"id":"...","title":"...","body":"...","scheduledAt":<ms since epoch>}'.
+function M.notifications_schedule(options, callback)
+  if type(options) == "table" then
+    local mapped = {}
+    for key, value in pairs(options) do
+      mapped[_NOTIFICATION_KEYS[key] or key] = value
+    end
+    options = mapped
+  end
+  local encoded, err = encode_options(options, "notifications.scheduleAsync")
+  if err then
+    fail_async(callback, err)
+    return
+  end
+  -- A missing or empty options value still goes to the SDK so it can report
+  -- the missing title in one place.
+  sdk.notifications_schedule(encoded or "{}", callback)
+end
+
+--- Cancel one scheduled notification by id.
+-- Callback signature: function(self, success, err_json_or_nil).
+function M.notifications_cancel(id, callback)
+  if type(id) ~= "string" or id == "" then
+    fail_async(callback, invalid_param("id must be a non-empty string", "notifications.cancelAsync"))
+    return
+  end
+  sdk.notifications_cancel(id, callback)
+end
+
+--- Cancel every scheduled notification.
+-- Callback signature: function(self, success, err_json_or_nil).
+function M.notifications_cancel_all(callback)
+  sdk.notifications_cancel_all(callback)
+end
+
+--- Check whether scheduled notifications are supported on the current platform.
+function M.notifications_is_supported()
+  return sdk.notifications_is_supported()
+end
+
+-- ── Entry point data ──
+
+--- Data the player arrived with, for example from a shared link or after
+-- registering. Returns a table (empty when there is none or on platforms that
+-- do not support it).
+function M.session_get_entry_point_data()
+  local text = sdk.session_get_entry_point_data()
+  if type(text) ~= "string" then return {} end
+  local ok, decoded = pcall(json.decode, text)
+  if ok and type(decoded) == "table" then return decoded end
+  return {}
+end
+
+-- ── Confirmed writes ──
+
+--- Store a string and learn whether the platform confirmed it.
+-- data_set_string is fire and forget. Use this (or data_flush) before something
+-- that may end the session, for example before showing a login prompt.
+-- Callback signature: function(self, success, err) where err is nil on success
+-- and an error JSON string on failure (see parse_error). success is false when
+-- the platform did not confirm the write.
+function M.data_set_string_async(key, value, callback)
+  sdk.data_set_string_async(key, value, callback)
+end
+
+--- Write pending data to the platform and learn whether it was confirmed.
+-- Callback signature: function(self, success, err), same as data_set_string_async.
+function M.data_flush(callback)
+  sdk.data_flush(callback)
+end
+
+--- Write pending player data (player_set_data) to the platform.
+-- Callback signature: function(self, success, err) where err is nil on success.
+function M.player_flush_data(callback)
+  sdk.player_flush_data(callback)
+end
+
+-- ── Referrals ──
+
+-- Return the options as a JSON string with a non-empty string `reference`, or
+-- nil, err_json (INVALID_PARAM).
+local function referral_share_options(options, context)
+  local encoded, err = encode_options(options, context)
+  if err then return nil, err end
+  if encoded == nil then
+    return nil, invalid_param("options.reference is required", context)
+  end
+  local ok, decoded = pcall(json.decode, encoded)
+  if not ok or type(decoded) ~= "table" then
+    return nil, invalid_param("options must be a JSON object with a reference", context)
+  end
+  if type(decoded.reference) ~= "string" or decoded.reference == "" then
+    return nil, invalid_param("options.reference must be a non-empty string", context)
+  end
+  return encoded
+end
+
+--- Open the platform's invite flow with a referral link.
+-- @param options Table (or JSON string): { reference = string (required, a stable campaign key),
+--   data = table (delivered to the invited player), title, text, image (base64 data URL, at most 2 MB) }.
+-- Callback signature: function(self, success, result_json) where result_json is '{"canceled":false}'
+-- (or true when the player closed the flow). Check referrals_is_supported() first.
+function M.referrals_share(options, callback)
+  local encoded, err = referral_share_options(options, "referrals.shareAsync")
+  if err then
+    fail_async(callback, err)
+    return
+  end
+  sdk.referrals_share(encoded, callback)
+end
+
+--- List the players who joined through the current player's referral links.
+-- Callback signature: function(self, success, result_json) where result_json is
+-- '{"referrals":{"<reference>":[{"playerId":"...","joinedAt":"..."}]},"signedRequest":"..."}'.
+-- Verify signedRequest on your server before granting rewards.
+function M.referrals_list(callback)
+  sdk.referrals_list(callback)
+end
+
+--- Check whether referrals are supported on the current platform.
+function M.referrals_is_supported()
+  return sdk.referrals_is_supported()
+end
+
+-- ── IAP subscriptions ──
+
+-- True between an iap_subscribe call and its callback. One checkout at a time,
+-- like iap_purchase (and independent of it). A second call while one is open is
+-- rejected: logged, and its callback fails on the next frame with INVALID_OPERATION.
+local _iap_subscribe_in_flight = false
+
+--- Get the subscription offers and the player's entitlement for each.
+-- Callback signature: function(self, success, subscriptions_json) where subscriptions_json is
+-- a JSON array of '{"productId":"...","title":"...","description":"...","price":"4.99 USD",
+-- "priceAmount":499,"priceCurrencyCode":"USD","billingPeriod":"monthly","isActive":true,
+-- "trialEligible":false,"introOffer":null,"retentionOffer":null}' (plus "isSandbox" and
+-- "signedRequest" where the platform provides them). Grant the entitlement when isActive is true.
+function M.iap_get_subscriptions(callback)
+  sdk.iap_get_subscriptions(callback)
+end
+
+--- Start a subscription checkout. Never offer a subscription the player already holds.
+-- @param product_id Subscription product id (string).
+-- Callback signature: function(self, success, result_json) where result_json is
+-- '{"status":"subscribed","subscription":{...}}' or '{"status":"cancelled"}'.
+-- Rejected if a subscribe is already in flight: the callback fails on the next frame.
+function M.iap_subscribe(product_id, callback)
+  if _iap_subscribe_in_flight then
+    print("[Yes2SDK] iap_subscribe rejected: a subscribe is already in flight. Wait for its callback before calling iap_subscribe again.")
+    fail_async(callback, json.encode({
+      code = "INVALID_OPERATION",
+      message = "A subscribe is already in flight",
+      context = "iap_subscribe",
+    }))
+    return
+  end
+  _iap_subscribe_in_flight = true
+  local ok, err = pcall(sdk.iap_subscribe, product_id, function(self, success, result_json)
+    _iap_subscribe_in_flight = false
+    if callback then callback(self, success, result_json) end
+  end)
+  if not ok then
+    -- Same as iap_purchase: release the guard, then re-raise the native error.
+    _iap_subscribe_in_flight = false
+    error(_name_native_error(err, "iap_subscribe"), 0)
+  end
+end
+
+--- Cancel the player's subscription.
+-- @param product_id Subscription product id (string).
+-- Callback signature: function(self, success, result) where result is a boolean (true when
+-- the subscription was cancelled) on success, and the error JSON on failure.
+function M.iap_cancel_subscription(product_id, callback)
+  sdk.iap_cancel_subscription(product_id, function(self, success, payload)
+    if not callback then return end
+    if success then
+      callback(self, true, payload == "true")
+    else
+      callback(self, false, payload)
+    end
+  end)
+end
+
+--- Claim the retention offer of a subscription (offered when the player is about to cancel).
+-- @param product_id Subscription product id (string).
+-- Callback signature: function(self, success, subscription_json), same shape as one entry of
+-- iap_get_subscriptions.
+function M.iap_claim_retention_offer(product_id, callback)
+  sdk.iap_claim_retention_offer(product_id, callback)
+end
+
+--- Get the status of one subscription.
+-- @param product_id Subscription product id (string).
+-- Callback signature: function(self, success, status_json) where status_json is
+-- '{"isActive":true,"productId":"...","expiresAt":1767225600000,"willRenew":true}'
+-- (expiresAt in Unix milliseconds; expiresAt and willRenew only when known).
+function M.iap_get_subscription_status(product_id, callback)
+  sdk.iap_get_subscription_status(product_id, callback)
+end
+
+--- Check whether subscriptions are supported on the current platform.
+function M.iap_is_subscription_supported()
+  return sdk.iap_is_subscription_supported()
 end
 
 return M

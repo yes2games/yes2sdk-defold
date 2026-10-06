@@ -1,4 +1,5 @@
 #include "yes2sdk_data.h"
+#include "yes2sdk_requests.h"
 #if defined(DM_PLATFORM_HTML5)
 int Yes2SDKData::GetInt(lua_State* L) {
     int top = lua_gettop(L);
@@ -67,6 +68,20 @@ int Yes2SDKData::DeleteAll(lua_State* L) {
     int top = lua_gettop(L);
     Yes2SDK_data_deleteAll();
     assert(top == lua_gettop(L));
+    return 0;
+}
+// Confirmed writes: Register comes after the argument checks so a bad argument
+// cannot leak a request.
+int Yes2SDKData::SetStringAsync(lua_State* L) {
+    const char* key = luaL_checkstring(L, 1);
+    const char* val = luaL_checkstring(L, 2);
+    int id = Yes2SDKRequests::Register(L, 3, "data_set_string_async");
+    Yes2SDK_data_setStringAsync(key, val, id, Yes2SDKRequests::Complete);
+    return 0;
+}
+int Yes2SDKData::Flush(lua_State* L) {
+    int id = Yes2SDKRequests::Register(L, 1, "data_flush");
+    Yes2SDK_data_flush(id, Yes2SDKRequests::Complete);
     return 0;
 }
 #endif
