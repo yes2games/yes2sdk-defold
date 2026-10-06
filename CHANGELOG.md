@@ -36,6 +36,12 @@ Format follows [Keep a Changelog](https://keepachangelog.com/). Versioning follo
 * **iap:** route each response to the call that made it ([caa2252](https://github.com/yes2games/yes2sdk-defold/commit/caa2252aace48bf7ffb4ec01e957e817bf4cd10e))
 * **player:** route every async result to the call that made it ([caa2252](https://github.com/yes2games/yes2sdk-defold/commit/caa2252aace48bf7ffb4ec01e957e817bf4cd10e))
 
+### Behaviour change
+
+* Failure callbacks now receive a JSON string `{"code","message","context"}` instead of plain text. Read it with `yes2sdk.parse_error(err)`. Games that matched the old error strings need to update.
+* An ad has 30 s to start and 180 s on screen before it is released, and `after_ad` always follows `no_fill`, except when a call is rejected because another ad is still showing.
+* The new calls require Yes2SDK runtime 2.10.0. Older runtimes report `FEATURE_NOT_SUPPORTED` for them.
+
 ## [1.7.0](https://github.com/yes2games/yes2sdk-defold/compare/v1.6.1...v1.7.0) (2026-09-15)
 
 
