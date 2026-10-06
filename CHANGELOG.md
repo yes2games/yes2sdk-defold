@@ -4,6 +4,38 @@ All notable changes to Yes2SDK for Defold will be documented in this file.
 
 Format follows [Keep a Changelog](https://keepachangelog.com/). Versioning follows [Semantic Versioning](https://semver.org/).
 
+## [1.8.0](https://github.com/yes2games/yes2sdk-defold/compare/v1.7.0...v1.8.0) (2026-10-06)
+
+
+### Features
+
+* add on_exit_requested lifecycle event ([caa2252](https://github.com/yes2games/yes2sdk-defold/commit/caa2252aace48bf7ffb4ec01e957e817bf4cd10e))
+* **auth:** add a game-drawn registration prompt ([caa2252](https://github.com/yes2games/yes2sdk-defold/commit/caa2252aace48bf7ffb4ec01e957e817bf4cd10e))
+* **context:** add image sharing ([caa2252](https://github.com/yes2games/yes2sdk-defold/commit/caa2252aace48bf7ffb4ec01e957e817bf4cd10e))
+* **data:** add confirmed writes and flush ([caa2252](https://github.com/yes2games/yes2sdk-defold/commit/caa2252aace48bf7ffb4ec01e957e817bf4cd10e))
+* exit request, referrals, subscriptions, notifications and registration prompt ([#38](https://github.com/yes2games/yes2sdk-defold/issues/38)) ([caa2252](https://github.com/yes2games/yes2sdk-defold/commit/caa2252aace48bf7ffb4ec01e957e817bf4cd10e))
+* **iap:** add subscriptions ([caa2252](https://github.com/yes2games/yes2sdk-defold/commit/caa2252aace48bf7ffb4ec01e957e817bf4cd10e))
+* **notifications:** add scheduled notifications ([caa2252](https://github.com/yes2games/yes2sdk-defold/commit/caa2252aace48bf7ffb4ec01e957e817bf4cd10e))
+* **referrals:** add referral sharing and listing ([caa2252](https://github.com/yes2games/yes2sdk-defold/commit/caa2252aace48bf7ffb4ec01e957e817bf4cd10e))
+* **session:** expose entry point data ([caa2252](https://github.com/yes2games/yes2sdk-defold/commit/caa2252aace48bf7ffb4ec01e957e817bf4cd10e))
+
+
+### Bug Fixes
+
+* **ads:** deliver after_ad after no_fill on every path ([caa2252](https://github.com/yes2games/yes2sdk-defold/commit/caa2252aace48bf7ffb4ec01e957e817bf4cd10e))
+* **ads:** give a started ad three minutes before releasing it ([caa2252](https://github.com/yes2games/yes2sdk-defold/commit/caa2252aace48bf7ffb4ec01e957e817bf4cd10e))
+* **ads:** guarantee exactly one outcome per rewarded ad ([caa2252](https://github.com/yes2games/yes2sdk-defold/commit/caa2252aace48bf7ffb4ec01e957e817bf4cd10e))
+* **ads:** ignore callbacks from an ad that is no longer current ([caa2252](https://github.com/yes2games/yes2sdk-defold/commit/caa2252aace48bf7ffb4ec01e957e817bf4cd10e))
+* **analytics:** send game choice details as event parameters ([caa2252](https://github.com/yes2games/yes2sdk-defold/commit/caa2252aace48bf7ffb4ec01e957e817bf4cd10e))
+* **banners:** call the banner API that exists so banners_show shows a banner ([caa2252](https://github.com/yes2games/yes2sdk-defold/commit/caa2252aace48bf7ffb4ec01e957e817bf4cd10e))
+* **bridge:** log errors raised inside SDK callbacks ([caa2252](https://github.com/yes2games/yes2sdk-defold/commit/caa2252aace48bf7ffb4ec01e957e817bf4cd10e))
+* **bridge:** route leaderboard, stats, config, review, banner status, game, friends and sign in results to the call that made them ([caa2252](https://github.com/yes2games/yes2sdk-defold/commit/caa2252aace48bf7ffb4ec01e957e817bf4cd10e))
+* **errors:** report every SDK failure as a JSON error with a stable code ([caa2252](https://github.com/yes2games/yes2sdk-defold/commit/caa2252aace48bf7ffb4ec01e957e817bf4cd10e))
+* **game:** call the invite link API that exists ([caa2252](https://github.com/yes2games/yes2sdk-defold/commit/caa2252aace48bf7ffb4ec01e957e817bf4cd10e))
+* **iap:** release the purchase guard when the native call raises ([caa2252](https://github.com/yes2games/yes2sdk-defold/commit/caa2252aace48bf7ffb4ec01e957e817bf4cd10e))
+* **iap:** route each response to the call that made it ([caa2252](https://github.com/yes2games/yes2sdk-defold/commit/caa2252aace48bf7ffb4ec01e957e817bf4cd10e))
+* **player:** route every async result to the call that made it ([caa2252](https://github.com/yes2games/yes2sdk-defold/commit/caa2252aace48bf7ffb4ec01e957e817bf4cd10e))
+
 ## [1.7.0](https://github.com/yes2games/yes2sdk-defold/compare/v1.6.1...v1.7.0) (2026-09-15)
 
 
