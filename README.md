@@ -286,7 +286,7 @@ yes2sdk.analytics_log_event("boss_defeated", json.encode({ level = 3, time = 42.
 
 These modules add extra player-facing features. They are **not guaranteed** to be available at runtime — guard with a support check and handle the unsupported case gracefully. Don't make your core gameplay depend on them.
 
-Support checks available: `ads_is_interstitial_supported()`, `ads_is_rewarded_supported()`, `auth_is_supported()`, `player_is_data_supported()`, `friends_is_supported()`, `banners_is_supported()`, `score_is_supported()`, `leaderboard_is_supported()`, `stats_is_supported()`, `config_is_supported()`, `review_is_supported()`, `iap_is_supported()`, `context_is_supported()`.
+Support checks available: `ads_is_interstitial_supported()`, `ads_is_rewarded_supported()`, `auth_is_supported()`, `player_is_data_supported()`, `friends_is_supported()`, `banners_is_supported()`, `score_is_supported()`, `leaderboard_is_supported()`, `stats_is_supported()`, `config_is_supported()`, `review_is_supported()`, `iap_is_supported()`. (`context_is_supported()` exists too, but it can return false on platforms where sharing works, so do not use it as a gate: see [Context sharing](#context-sharing-image).)
 
 ```lua
 if yes2sdk.ads_is_rewarded_supported() then
@@ -437,7 +437,7 @@ yes2sdk.context_share({
     intent = "SHARE",              -- "SHARE" (default), "INVITE", "REQUEST" or "CHALLENGE"
     image = data_url,              -- see below
     text = "Look at my score!",
-    data = { score = 120 },        -- optional, handed back to whoever opens the share
+    data = { score = 120 },        -- optional, handed back to whoever opens the share on platforms that support it
 }, function(self, success, err)
     if not success then
         print("Share failed: " .. yes2sdk.parse_error(err).code)
@@ -445,8 +445,9 @@ yes2sdk.context_share({
 end)
 ```
 
-- `image` is a URL on most platforms. Some platforms require a base64 PNG or a `data:image/png;base64,...` URL, so prefer the data URL, it works everywhere.
-- Try the share and handle a failure. Do not rely only on `context_is_supported()`: treat it as a hint, not a guarantee.
+- `image` is a URL on most platforms. Some platforms require a base64 PNG or a `data:image/png;base64,...` URL, so prefer the data URL. Fields a platform does not use (`image`, `text` or `data`) are ignored.
+- Do not gate `context_share` on `context_is_supported()`: it can return false on platforms where sharing works. Call `context_share` and handle the failure; a `FEATURE_NOT_SUPPORTED` code means the platform has no share.
+- The callback is optional: `yes2sdk.context_share(options)` is a fire-and-forget share.
 - Passing options that are not a table or a JSON string fails the callback with `INVALID_PARAM`.
 
 ### Leaderboard
@@ -643,7 +644,7 @@ The native extension is HTML5-only. In the Defold editor, `yes2sdk.*` calls run 
 - `initialize` / `start_game` succeed on the next frame
 - **Ads play a timed mock flow** (3s interstitial, 5s rewarded) and then fire the full callback sequence, so pause-resume wiring in `before_ad` / `after_ad` and the reward path in `ad_viewed` are exercised like a real ad
 - **IAP works end to end**: `iap_is_supported()` returns true, `iap_get_catalog` returns a sample catalog, `iap_purchase` accepts any product id and resolves with a realistic purchase payload, and `iap_get_purchases` / `iap_consume_purchase` operate on a session purchase list
-- `context_share` succeeds on the next frame and prints the share, and `context_is_supported()` returns true
+- `context_share` succeeds on the next frame and prints the share, and `context_is_supported()` returns true (real platforms may report false even where sharing works, so do not gate on it)
 - Other modules keep the one-time-warning stub with sensible defaults
 
 Configure the mock in `game.project` (all keys optional):

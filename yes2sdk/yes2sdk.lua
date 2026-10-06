@@ -1275,9 +1275,11 @@ end
 --   platforms; some require a base64 PNG or a "data:image/png;base64,..." URL, so prefer the
 --   data URL. Pass nil for a plain share.
 -- Callback signature: function(self, success, err) where err is nil on success.
--- The call may fail even when context_is_supported() is true or false: try it and handle
--- the failure (see M.parse_error).
+-- Fields a platform does not use are ignored. Do not gate this call on context_is_supported(),
+-- which can be false where sharing works: call it and handle the failure (see M.parse_error);
+-- FEATURE_NOT_SUPPORTED means the platform has no share. The callback is optional.
 function M.context_share(options, callback)
+  if callback == nil then callback = function() end end
   local to_encode = options
   if type(options) == "table" then
     to_encode = {}
@@ -1294,7 +1296,7 @@ function M.context_share(options, callback)
   sdk.context_share(encoded or "", callback)
 end
 
---- Check whether the platform supports sharing. Not a guarantee either way: try the share.
+--- Hint only: can be false on platforms where sharing works. Do not gate context_share on it.
 function M.context_is_supported()
   return sdk.context_is_supported()
 end

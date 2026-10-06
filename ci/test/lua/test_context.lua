@@ -54,6 +54,18 @@ function T.bad_options_type_fails_next_frame_with_invalid_param()
   h.eq(decode(got[2]).code, "INVALID_PARAM")
 end
 
+function T.nil_callback_is_wrapped_in_a_noop()
+  local fake = h.fake_native()
+  local sdk = h.load_wrapper{ native = fake }
+  sdk.context_share({ text = "x" })
+  local call = fake:last("context_share")
+  h.truthy(call, "native must be called")
+  h.eq(type(call.args[2]), "function", "native must receive a callback")
+  call.args[2](nil, true, nil)
+  sdk.context_share(42)
+  h.advance(0)
+end
+
 function T.callback_is_the_natives_own()
   local fake = h.fake_native()
   local sdk = h.load_wrapper{ native = fake }
