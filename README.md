@@ -778,7 +778,7 @@ Launch checklist:
 - Grant and consume incomplete purchases from `iap_get_purchases` at startup, and never offer a subscription the player already holds. Verify `signedRequest` on your server before granting value.
 - Show a registration prompt to guests. If you use your own, turn off Automatic login reminders in the game's Overview settings on the Yes2Games Dashboard.
 - Save inside `on_exit_requested`, synchronously.
-- Use Jest's Automatic loading screen mode for now. Still call `set_loading_progress` as assets load and `start_game` when the game is playable. In Manual mode Jest closes the game after 15 seconds without a progress update, and Yes2SDK only keeps it alive once it has initialized, so a long engine download can hit that timeout.
+- Use Jest's Auto loading screen mode for now. Still call `set_loading_progress` as assets load and `start_game` when the game is playable. In Manual mode Jest closes the game after 15 seconds without a progress update, and Yes2SDK only keeps it alive once it has initialized, so a long engine download can hit that timeout.
 - Use relative asset paths, and read `session_get_entry_point_data` instead of URL parameters.
 
 ## Integration Checklist
