@@ -365,7 +365,7 @@ end
   Otherwise you get `INVALID_PARAM`. Keep it short and plain: the platform may drop emoji and accented characters from a long pre-filled text.
 - `data` comes back from `session_get_entry_point_data()` after the player registers.
 - `on_close` runs once when the prompt closes, from `prompt.close()` or the platform's own close button. It always runs after the call returns, never inside the `prompt.close()` or `auth_show_registration_prompt` call, and never when `auth_show_registration_prompt` returned an error. `login()` and `close()` return `false` once the prompt is closed.
-- For a custom prompt, the platform's own login reminders must be turned off for the game. That is a per-game platform setting, not an SDK call.
+- For a custom prompt on Jest, turn off Automatic login reminders in your game's Overview settings on the Yes2Games Dashboard (available once Jest is enabled for your studio). It is a per-game setting, not an SDK call.
 - Platforms without a registration prompt return `FEATURE_NOT_SUPPORTED`.
 
 ### Friends
@@ -776,7 +776,7 @@ Launch checklist:
 - Save as a guest before any login prompt.
 - Schedule day 1 to day 7 notifications with images for registered players.
 - Grant and consume incomplete purchases from `iap_get_purchases` at startup, and never offer a subscription the player already holds. Verify `signedRequest` on your server before granting value.
-- Show a registration prompt to guests. If you use your own, ask the Yes2Games team to turn off automatic login reminders (`autoLoginReminders`) for the game.
+- Show a registration prompt to guests. If you use your own, turn off Automatic login reminders in the game's Overview settings on the Yes2Games Dashboard.
 - Save inside `on_exit_requested`, synchronously.
 - Use Jest's Automatic loading screen mode for now. Still call `set_loading_progress` as assets load and `start_game` when the game is playable. In Manual mode Jest closes the game after 15 seconds without a progress update, and Yes2SDK only keeps it alive once it has initialized, so a long engine download can hit that timeout.
 - Use relative asset paths, and read `session_get_entry_point_data` instead of URL parameters.
