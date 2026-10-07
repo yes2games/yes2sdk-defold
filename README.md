@@ -5,6 +5,8 @@
 
 A single SDK for your Defold HTML5 game. Integrate once against Yes2SDK, submit through the Yes2Games Dashboard, and the Yes2Games team handles the rest.
 
+Supported platforms: Poki, CrazyGames, Yandex Games, GameDistribution, YouTube Playables and [Jest](#jest).
+
 ## Requirements
 
 - Yes2SDK runtime 2.10.0 or newer for referrals, subscriptions, notifications, context sharing, entry point data, the registration prompt, confirmed writes and `on_exit_requested`. Older runtimes report `FEATURE_NOT_SUPPORTED` for those calls, and `on_exit_requested` never fires.
@@ -773,8 +775,8 @@ Launch checklist:
 
 - Save as a guest before any login prompt.
 - Schedule day 1 to day 7 notifications with images for registered players.
-- Grant and consume incomplete purchases from `iap_get_purchases` at startup, and never offer a subscription the player already holds.
-- Show a registration prompt to guests. If you use your own, turn the build option `autoLoginReminders` off.
+- Grant and consume incomplete purchases from `iap_get_purchases` at startup, and never offer a subscription the player already holds. Verify `signedRequest` on your server before granting value.
+- Show a registration prompt to guests. If you use your own, ask the Yes2Games team to turn off automatic login reminders (`autoLoginReminders`) for the game.
 - Save inside `on_exit_requested`, synchronously.
 - Use Jest's Automatic loading screen mode for now. Still call `set_loading_progress` as assets load and `start_game` when the game is playable. In Manual mode Jest closes the game after 15 seconds without a progress update, and Yes2SDK only keeps it alive once it has initialized, so a long engine download can hit that timeout.
 - Use relative asset paths, and read `session_get_entry_point_data` instead of URL parameters.
