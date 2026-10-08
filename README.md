@@ -23,7 +23,7 @@ In your `game.project`, add:
 
 ```ini
 [project]
-dependencies#0 = https://github.com/yes2games/yes2sdk-defold/archive/refs/tags/v1.8.0.zip
+dependencies#0 = https://github.com/yes2games/yes2sdk-defold/archive/refs/tags/v1.9.0.zip
 ```
 
 Then in Defold Editor: **Project > Fetch Libraries**.
@@ -930,7 +930,7 @@ Use a tagged release URL, not a branch archive. GitHub serves tagged archives mo
 
 ```ini
 # Good — tagged release
-dependencies#0 = https://github.com/yes2games/yes2sdk-defold/archive/refs/tags/v1.8.0.zip
+dependencies#0 = https://github.com/yes2games/yes2sdk-defold/archive/refs/tags/v1.9.0.zip
 
 # Bad — branch archive (intermittent failures)
 dependencies#0 = https://github.com/yes2games/yes2sdk-defold/archive/refs/heads/main.zip
