@@ -311,7 +311,7 @@ yes2sdk.analytics_log_event("boss_defeated", json.encode({ level = 3, time = 42.
 
 These modules add extra player-facing features. They are **not guaranteed** to be available at runtime — guard with a support check and handle the unsupported case gracefully. Don't make your core gameplay depend on them.
 
-Support checks available: `ads_is_interstitial_supported()`, `ads_is_rewarded_supported()`, `auth_is_supported()`, `player_is_data_supported()`, `friends_is_supported()`, `banners_is_supported()`, `score_is_supported()`, `leaderboard_is_supported()`, `stats_is_supported()`, `config_is_supported()`, `review_is_supported()`, `iap_is_supported()`, `iap_is_subscription_supported()`, `referrals_is_supported()`, `notifications_is_supported()`. (`context_is_supported()` exists too, but it can return false on platforms where sharing works, so do not use it as a gate: see [Context sharing](#context-sharing-image).)
+Support checks available: `ads_is_interstitial_supported()`, `ads_is_rewarded_supported()`, `auth_is_supported()`, `player_is_data_supported()`, `player_is_bot_avatar_supported()`, `friends_is_supported()`, `banners_is_supported()`, `score_is_supported()`, `leaderboard_is_supported()`, `stats_is_supported()`, `config_is_supported()`, `review_is_supported()`, `iap_is_supported()`, `iap_is_subscription_supported()`, `referrals_is_supported()`, `notifications_is_supported()`. (`context_is_supported()` exists too, but it can return false on platforms where sharing works, so do not use it as a gate: see [Context sharing](#context-sharing-image).)
 
 ```lua
 if yes2sdk.ads_is_rewarded_supported() then
@@ -414,6 +414,25 @@ end)
 
 yes2sdk.player_set_data(json.encode({level = 5}), function(self, success, error) end)
 ```
+
+### Bot avatars
+
+Games that fill a lobby or leaderboard with computer-controlled players can ask the platform for a matching avatar. The username seeds the picture, so the same bot always gets the same avatar. Only some platforms generate them: gate the call on `player_is_bot_avatar_supported()` and keep your own art as the fallback.
+
+```lua
+if yes2sdk.player_is_bot_avatar_supported() then
+    yes2sdk.player_get_bot_avatar("RoboRita", "small", function(self, success, url)
+        if success then
+            -- load url as the bot's picture
+        else
+            -- use your own bot art
+        end
+    end)
+end
+```
+
+- `size` is `"small"`, `"medium"` (the default) or `"large"`, and may be left out: `player_get_bot_avatar("RoboRita", callback)`.
+- On success the callback gets the image URL as a plain string. An empty username or an unknown size fails with `INVALID_PARAM`, and a platform without bot avatars fails with `FEATURE_NOT_SUPPORTED` (see [Errors](#errors)).
 
 ### Game Extras
 
@@ -654,7 +673,7 @@ yes2sdk.notifications_cancel("daily_3", function(self, success, err) end)
 yes2sdk.notifications_cancel_all(function(self, success, err) end)
 ```
 
-- **Options:** `id`, `title` (required), `body`, `scheduled_in_days` (a whole number from 0 to 7) or `delay_seconds` (use one of them, not both), `cta_text`, `priority` (`low`, `medium`, `high` or `critical`), `image_asset_id` or `image_data_url` (use one of them), `icon_url`, `data`. A JSON string is accepted too and is passed through as is, so use the camelCase names in that case.
+- **Options:** `id`, `title` (required, a string; it may be empty, and platforms that allow it then send the notification without a title), `body`, `scheduled_in_days` (a whole number from 0 to 7) or `delay_seconds` (use one of them, not both), `cta_text`, `priority` (`low`, `medium`, `high` or `critical`), `image_asset_id` or `image_data_url` (use one of them), `icon_url`, `data`. A JSON string is accepted too and is passed through as is, so use the camelCase names in that case.
 - **Same id replaces.** Scheduling with an id that is already scheduled replaces the earlier notification. Without an id one is generated and returned.
 - **Result:** the callback gets `{"id","title","body","scheduledAt"}` with `scheduledAt` in milliseconds since the epoch. Invalid options fail with `INVALID_PARAM`.
 
@@ -682,7 +701,25 @@ if yes2sdk.referrals_is_supported() then
 end
 ```
 
-`referrals_share` options: `reference` (required, a non-empty string), `data` (table), `title`, `text` and `image` (base64 data URL, PNG, JPEG or WebP, at most 2 MB). A missing or empty `reference` fails the callback with `INVALID_PARAM`. Both calls report failures through the usual error JSON (see [Errors](#errors)).
+`referrals_share` options: `reference` (required, a non-empty string), `data` (table), `title`, `text` and `image` (base64 data URL, PNG, JPEG or WebP, at most 2 MB). A missing or empty `reference` fails the callback with `INVALID_PARAM`.
+
+Two more options are used only on platforms that support them (Jest today):
+
+- `onboarding_slug`: the slug of a game that invited players go through first, for example a tutorial game.
+- `notification_templates`: notifications sent to the referrer as invited players join. Each template is `{ min_conversion_count = <whole number, 0 or more>, variants = { ... } }` with at least one variant `{ title, body, cta_text, image_reference }` (`body` and `cta_text` are required; `image_reference` is the id of a pre-approved image). The platform uses the template with the highest `min_conversion_count` the referrer has reached and picks one of its variants.
+
+```lua
+yes2sdk.referrals_share({
+    reference = "party_mode_v1",
+    onboarding_slug = "party-tutorial",
+    notification_templates = {
+        { min_conversion_count = 1, variants = { { body = "A friend joined your party!", cta_text = "Play" } } },
+        { min_conversion_count = 5, variants = { { title = "Party Mode unlocked", body = "Five friends joined.", cta_text = "Celebrate" } } },
+    },
+}, function(self, success, result) end)
+```
+
+The snake_case names above are mapped for you. In a JSON string use the camelCase names (`onboardingSlug`, `notificationTemplates`, `minConversionCount`, `ctaText`, `imageReference`). Malformed values fail with `INVALID_PARAM`. Both calls report failures through the usual error JSON (see [Errors](#errors)).
 
 ---
 
@@ -761,12 +798,12 @@ Yes2SDK loads the platform SDK itself. Do not add Jest's own SDK script or engin
 
 Supported on Jest:
 
-- Player, and [Auth](#auth) with the [Registration prompt](#registration-prompt) (guests only)
+- Player, including [Bot avatars](#bot-avatars), and [Auth](#auth) with the [Registration prompt](#registration-prompt) (guests only)
 - [Data](#data-required) (1 MB) and [Lifecycle events](#lifecycle-events-required), including `on_exit_requested`
 - [In-app purchases](#in-app-purchases) and [Subscriptions](#subscriptions)
 - [Notifications](#notifications) (`scheduled_in_days` 0 to 7, with images)
 - [Session](#session--gameplay-required) entry point data (`session_get_entry_point_data`)
-- [Referrals](#referrals) and [Context sharing (image)](#context-sharing-image)
+- [Referrals](#referrals) (with `onboarding_slug` and `notification_templates`) and [Context sharing (image)](#context-sharing-image)
 - [Analytics](#analytics-recommended) (logging only)
 
 Not supported: banners, leaderboard, stats, review, remote config, friends and score. Jest has no in-game ads: `ads_is_interstitial_supported()`, `ads_is_rewarded_supported()` and `ads_is_rewarded_ad_available()` return false, and `ads_show_interstitial` / `ads_show_rewarded` call `no_fill` and then `after_ad` (`before_ad`, `ad_viewed` and `ad_dismissed` never fire). Never rely on ads, and grant no reward from them.
@@ -838,6 +875,7 @@ The native extension is HTML5-only. In the Defold editor, `yes2sdk.*` calls run 
 - `initialize` / `start_game` succeed on the next frame
 - **Ads play a timed mock flow** (3s interstitial, 5s rewarded) and then fire the full callback sequence, so pause-resume wiring in `before_ad` / `after_ad` and the reward path in `ad_viewed` are exercised like a real ad
 - Referrals work too: `referrals_is_supported()` returns true, `referrals_share` succeeds and `referrals_list` returns an empty list
+- Bot avatars: `player_is_bot_avatar_supported()` returns true and `player_get_bot_avatar` succeeds on the next frame with a placeholder `mock://bot-avatar/<size>/<username>` URL. It is not a loadable image, so your fallback art path runs
 - `context_share` succeeds on the next frame and prints the share, and `context_is_supported()` returns true (real platforms may report false even where sharing works, so do not gate on it)
 - **IAP works end to end**: `iap_is_supported()` returns true, `iap_get_catalog` returns a sample catalog, `iap_purchase` accepts any product id and resolves with a realistic purchase payload, and `iap_get_purchases` / `iap_consume_purchase` operate on a session purchase list. Mock purchases carry `"isSandbox":true`. Subscriptions are mocked too: a sample `yes2.mock.premium.monthly` offer, subscribe / cancel / retention offer / status on session state
 - `auth_show_registration_prompt` returns a handle: `login()` prints a line, `close()` fires `on_close` on the next frame

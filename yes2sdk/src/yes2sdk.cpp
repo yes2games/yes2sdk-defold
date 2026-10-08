@@ -300,6 +300,8 @@ static const luaL_reg Module_methods[] = {
     {"player_get_photo", Yes2SDKPlayer::GetPhoto},
     {"player_get_signed_info", Yes2SDKPlayer::GetSignedInfo},
     {"player_is_data_supported", Yes2SDKPlayer::IsDataSupported},
+    {"player_get_bot_avatar", Yes2SDKPlayer::GetBotAvatar},
+    {"player_is_bot_avatar_supported", Yes2SDKPlayer::IsBotAvatarSupported},
 
     // Auth
     {"auth_is_authenticated", Yes2SDKAuth::IsAuthenticated},

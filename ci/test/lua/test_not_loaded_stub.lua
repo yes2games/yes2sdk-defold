@@ -13,6 +13,7 @@ local CASES = {
   { "data_set_string_async", "data.setStringAsync", function(s, cb) s.data_set_string_async("k", "v", cb) end },
   { "data_flush", "data.flushAsync", function(s, cb) s.data_flush(cb) end },
   { "player_flush_data", "player.flushDataAsync", function(s, cb) s.player_flush_data(cb) end },
+  { "player_get_bot_avatar", "player.getBotAvatarAsync", function(s, cb) s.player_get_bot_avatar("bot", "small", cb) end },
   { "referrals_share", "referrals.shareAsync", function(s, cb) s.referrals_share({ reference = "r" }, cb) end },
   { "referrals_list", "referrals.listAsync", function(s, cb) s.referrals_list(cb) end },
   { "notifications_schedule", "notifications.scheduleAsync", function(s, cb) s.notifications_schedule({ title = "t" }, cb) end },

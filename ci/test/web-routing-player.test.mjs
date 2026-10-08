@@ -70,6 +70,11 @@ const CASES = [
         first: ["http://a", '"http://a"'], second: ["http://b", '"http://b"'], nullish: [undefined, "null"],
     },
     {
+        name: "Yes2SDK_player_getBotAvatar", method: "getBotAvatarAsync",
+        call: (w, id) => w.exports.Yes2SDK_player_getBotAvatar("RoboRita", "small", id, CB),
+        first: ["http://a", "http://a"], second: ["http://b", "http://b"], nullish: [null, ""],
+    },
+    {
         name: "Yes2SDK_player_getSignedInfo", method: "getSignedPlayerInfoAsync",
         call: (w, id) => w.exports.Yes2SDK_player_getSignedInfo("p", id, CB),
         first: [{ s: 1 }, '{"s":1}'], second: [{ s: 2 }, '{"s":2}'], nullish: [null, "{}"],
@@ -199,4 +204,39 @@ test("player: arguments reach Core (keys, data, size, payload)", async () => {
     assert.deepEqual(seen.data, { x: 1 });
     assert.equal(seen.size, "large");
     assert.equal(seen.payload, undefined);
+});
+
+test("player_get_bot_avatar: username and size reach Core, an empty size becomes the default", async () => {
+    const seen = [];
+    const player = {
+        getBotAvatarAsync(...args) { seen.push(args); return Promise.resolve("u"); },
+    };
+    const web = loadWebLib(LIBS, { yes2sdk: { player } });
+    web.exports.Yes2SDK_player_getBotAvatar("RoboRita", "large", 1, CB);
+    web.exports.Yes2SDK_player_getBotAvatar("Bob", "", 2, CB);
+    await web.flush();
+    assert.deepEqual(seen, [["RoboRita", "large"], ["Bob", undefined]]);
+});
+
+test("player_get_bot_avatar: an older SDK without the method is FEATURE_NOT_SUPPORTED", async () => {
+    const web = loadWebLib(LIBS, { yes2sdk: { player: {} } });
+    web.exports.Yes2SDK_player_getBotAvatar("RoboRita", "small", 5, CB);
+    await web.flush();
+    const done = completions(web);
+    assert.equal(done.length, 1);
+    assert.deepEqual([done[0][0], done[0][1]], [5, 0]);
+    assert.equal(JSON.parse(done[0][2]).code, "FEATURE_NOT_SUPPORTED");
+});
+
+test("player_is_bot_avatar_supported reflects the SDK and is false when absent", () => {
+    const yes = loadWebLib(LIBS, { yes2sdk: { player: { isBotAvatarSupported: () => true } } });
+    assert.equal(yes.exports.Yes2SDK_player_isBotAvatarSupported(), 1);
+    const no = loadWebLib(LIBS, { yes2sdk: { player: { isBotAvatarSupported: () => false } } });
+    assert.equal(no.exports.Yes2SDK_player_isBotAvatarSupported(), 0);
+    const older = loadWebLib(LIBS, { yes2sdk: { player: {} } });
+    assert.equal(older.exports.Yes2SDK_player_isBotAvatarSupported(), 0);
+    const none = loadWebLib(LIBS, {});
+    assert.equal(none.exports.Yes2SDK_player_isBotAvatarSupported(), 0);
+    const throwing = loadWebLib(LIBS, { yes2sdk: { player: { isBotAvatarSupported() { throw new Error("x"); } } } });
+    assert.equal(throwing.exports.Yes2SDK_player_isBotAvatarSupported(), 0);
 });

@@ -86,6 +86,9 @@ if not sdk then
   function sdk.ads_is_rewarded_supported() warn() return false end
   function sdk.auth_is_supported() warn() return false end
   function sdk.player_is_data_supported() warn() return false end
+  -- Bot avatars: unsupported, and the async call fails.
+  function sdk.player_is_bot_avatar_supported() warn() return false end
+  function sdk.player_get_bot_avatar(username, size, callback) stub_fail(callback, "player.getBotAvatarAsync") end
   function sdk.session_is_audio_enabled() warn() return true end
   function sdk.session_get_entry_point_data() warn() return "{}" end
   -- Registration prompt: no extension, no prompt.
@@ -334,6 +337,18 @@ if not sdk then
       if callback then
         next_frame(function(tself) callback(tself, true, '{"referrals":{},"signedRequest":"mock"}') end)
       end
+    end
+
+    -- Bot avatars: supported, and the URL names the bot. It is a placeholder,
+    -- not a loadable image, so the game's fallback art path gets exercised.
+    function sdk.player_is_bot_avatar_supported() return true end
+    function sdk.player_get_bot_avatar(username, size, callback)
+      local name = tostring(username):gsub("[^%w%-%._~]", function(c)
+        return string.format("%%%02X", string.byte(c))
+      end)
+      local url = "mock://bot-avatar/" .. tostring(size or "medium") .. "/" .. name
+      print("[Yes2SDK] Mock: player_get_bot_avatar succeeded (" .. url .. ")")
+      if callback then next_frame(function(tself) callback(tself, true, url) end) end
     end
 
     -- Notifications: schedule echoes the notification with a computed time.
@@ -1140,6 +1155,40 @@ function M.player_get_signed_info(payload, callback)
   sdk.player_get_signed_info(payload, callback)
 end
 
+local _BOT_AVATAR_CONTEXT = "player.getBotAvatarAsync"
+local _BOT_AVATAR_SIZES = { small = true, medium = true, large = true }
+
+--- Get a platform-generated avatar for a computer-controlled player (bot).
+-- The username seeds the picture, so the same bot always gets the same avatar.
+-- Gate it on player_is_bot_avatar_supported() and keep your own art as the
+-- fallback: unsupported platforms fail with FEATURE_NOT_SUPPORTED.
+-- @param username Bot name (non-empty string).
+-- @param size Optional "small", "medium" (default) or "large". May be omitted:
+--   player_get_bot_avatar(username, callback) works too.
+-- Callback signature: function(self, success, url) where url is the avatar URL
+-- string on success and the error JSON on failure. An empty username or an
+-- unknown size fails with INVALID_PARAM on the next frame.
+function M.player_get_bot_avatar(username, size, callback)
+  if callback == nil and type(size) == "function" then
+    size, callback = nil, size
+  end
+  if type(username) ~= "string" or username == "" then
+    fail_async(callback, invalid_param("username must be a non-empty string", _BOT_AVATAR_CONTEXT))
+    return
+  end
+  if size ~= nil and not _BOT_AVATAR_SIZES[size] then
+    fail_async(callback, invalid_param('size must be "small", "medium" or "large"', _BOT_AVATAR_CONTEXT))
+    return
+  end
+  sdk.player_get_bot_avatar(username, size or "medium", callback)
+end
+
+--- Whether the platform generates bot avatars (see player_get_bot_avatar).
+-- Returns a boolean; false before initialization.
+function M.player_is_bot_avatar_supported()
+  return sdk.player_is_bot_avatar_supported()
+end
+
 --- Whether player data storage (player_get_data / player_set_data) is available.
 -- Backed by local web storage on platforms without cloud save, so this is true
 -- whenever the SDK is initialized. Returns a boolean.
@@ -1617,7 +1666,8 @@ local _NOTIFICATION_KEYS = {
 
 --- Schedule a notification for later.
 -- @param options Table (or a JSON string, passed through as is with the SDK's
---   own camelCase names): { id, title (required), body, delay_seconds or
+--   own camelCase names): { id, title (required, a string; may be empty to
+--   send no title where the platform allows it), body, delay_seconds or
 --   scheduled_in_days (integer 0 to 7, not both), cta_text, priority
 --   ("low"|"medium"|"high"|"critical"), image_asset_id or image_data_url,
 --   icon_url, data }. The SDK validates the values and reports INVALID_PARAM.
@@ -1638,7 +1688,7 @@ function M.notifications_schedule(options, callback)
     return
   end
   -- A missing or empty options value still goes to the SDK so it can report
-  -- the missing title in one place.
+  -- the missing title in one place. An empty title string is valid.
   sdk.notifications_schedule(encoded or "{}", callback)
 end
 
@@ -1702,9 +1752,56 @@ end
 
 -- ── Referrals ──
 
+-- Public snake_case option names to the camelCase names the SDK takes, at each
+-- level of the share options. Keys not listed here pass through unchanged, and
+-- `data` is never renamed.
+local _REFERRAL_KEYS = {
+  onboarding_slug = "onboardingSlug",
+  notification_templates = "notificationTemplates",
+}
+local _REFERRAL_TEMPLATE_KEYS = { min_conversion_count = "minConversionCount" }
+local _REFERRAL_VARIANT_KEYS = { cta_text = "ctaText", image_reference = "imageReference" }
+
+-- Copy `t` with its keys renamed through `names`. Non-table values come back as is.
+local function rename_keys(t, names)
+  if type(t) ~= "table" then return t end
+  local out = {}
+  for key, value in pairs(t) do
+    out[names[key] or key] = value
+  end
+  return out
+end
+
+-- Rename the snake_case keys of a share options table, templates and variants
+-- included, without touching the caller's tables. Values are left for the SDK
+-- to validate.
+local function map_referral_options(options)
+  local mapped = rename_keys(options, _REFERRAL_KEYS)
+  local templates = mapped.notificationTemplates
+  if type(templates) == "table" then
+    local out = {}
+    for i, template in pairs(templates) do
+      local t = rename_keys(template, _REFERRAL_TEMPLATE_KEYS)
+      if type(t) == "table" and type(t.variants) == "table" then
+        local variants = {}
+        for j, variant in pairs(t.variants) do
+          variants[j] = rename_keys(variant, _REFERRAL_VARIANT_KEYS)
+        end
+        t.variants = variants
+      end
+      out[i] = t
+    end
+    mapped.notificationTemplates = out
+  end
+  return mapped
+end
+
 -- Return the options as a JSON string with a non-empty string `reference`, or
 -- nil, err_json (INVALID_PARAM).
 local function referral_share_options(options, context)
+  if type(options) == "table" then
+    options = map_referral_options(options)
+  end
   local encoded, err = encode_options(options, context)
   if err then return nil, err end
   if encoded == nil then
@@ -1721,8 +1818,14 @@ local function referral_share_options(options, context)
 end
 
 --- Open the platform's invite flow with a referral link.
--- @param options Table (or JSON string): { reference = string (required, a stable campaign key),
---   data = table (delivered to the invited player), title, text, image (base64 data URL, at most 2 MB) }.
+-- @param options Table (or JSON string, passed through as is with the SDK's own
+--   camelCase names): { reference = string (required, a stable campaign key),
+--   data = table (delivered to the invited player), title, text, image (base64 data URL, at most 2 MB),
+--   onboarding_slug = string (game that invited players go through first),
+--   notification_templates = array of { min_conversion_count = integer >= 0,
+--   variants = array (at least one) of { title, body, cta_text, image_reference } } }.
+--   onboarding_slug and notification_templates are only used on platforms that
+--   support them; the SDK validates them and reports INVALID_PARAM.
 -- Callback signature: function(self, success, result_json) where result_json is '{"canceled":false}'
 -- (or true when the player closed the flow). Check referrals_is_supported() first.
 function M.referrals_share(options, callback)

@@ -130,3 +130,21 @@ test("referrals: isSupported follows the SDK and is false when anything is missi
     const none = loadWebLib(LIBS, {});
     assert.equal(none.exports.Yes2SDK_referrals_isSupported(), 0);
 });
+
+test("referrals: onboardingSlug and notificationTemplates reach Core unchanged", async () => {
+    const seen = [];
+    const web = loadWebLib(LIBS, {
+        yes2sdk: { referrals: { shareAsync(options) { seen.push(options); return Promise.resolve({ canceled: false }); } } },
+    });
+    const options = {
+        reference: "r",
+        onboardingSlug: "tutorial-game",
+        notificationTemplates: [
+            { minConversionCount: 1, variants: [{ title: null, body: "A friend joined!", ctaText: "Play", imageReference: "img" }] },
+        ],
+    };
+    web.exports.Yes2SDK_referrals_share(str(web, JSON.stringify(options)), 3, CB);
+    await web.flush();
+    assert.deepEqual(seen, [options]);
+    assert.deepEqual(completions(web), [[3, 1, JSON.stringify({ canceled: false })]]);
+});

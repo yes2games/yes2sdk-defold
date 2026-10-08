@@ -69,4 +69,15 @@ int Yes2SDKPlayer::IsDataSupported(lua_State* L) {
     lua_pushboolean(L, Yes2SDK_player_isDataSupported());
     return 1;
 }
+int Yes2SDKPlayer::GetBotAvatar(lua_State* L) {
+    const char* username = luaL_checkstring(L, 1);
+    const char* size = luaL_optstring(L, 2, "medium");
+    int id = Yes2SDKRequests::Register(L, 3, "player_get_bot_avatar");
+    Yes2SDK_player_getBotAvatar(username, size, id, Yes2SDKRequests::Complete);
+    return 0;
+}
+int Yes2SDKPlayer::IsBotAvatarSupported(lua_State* L) {
+    lua_pushboolean(L, Yes2SDK_player_isBotAvatarSupported());
+    return 1;
+}
 #endif

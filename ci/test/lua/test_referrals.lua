@@ -21,6 +21,54 @@ function T.share_encodes_a_table_and_passes_the_callback_to_the_native()
   h.eq(type(call.args[2]), "function")
 end
 
+function T.share_maps_snake_case_jest_options_to_camel_case()
+  local fake = h.fake_native()
+  local sdk = h.load_wrapper{ native = fake }
+  local templates = {
+    { min_conversion_count = 1, variants = { { body = "A friend joined!", cta_text = "Play" } } },
+    { min_conversion_count = 5, variants = {
+      { title = "Five friends", body = "Party time", cta_text = "Go", image_reference = "img_5" },
+      { body = "Alt", ctaText = "Open" },
+    } },
+  }
+  local options = { reference = "r", data = { cta_text = "kept" }, onboarding_slug = "tutorial-game",
+    notification_templates = templates }
+  sdk.referrals_share(options, function() end)
+  h.deep_eq(h.env.json.decode(fake:last("referrals_share").args[1]), {
+    reference = "r",
+    data = { cta_text = "kept" },
+    onboardingSlug = "tutorial-game",
+    notificationTemplates = {
+      { minConversionCount = 1, variants = { { body = "A friend joined!", ctaText = "Play" } } },
+      { minConversionCount = 5, variants = {
+        { title = "Five friends", body = "Party time", ctaText = "Go", imageReference = "img_5" },
+        { body = "Alt", ctaText = "Open" },
+      } },
+    },
+  })
+  -- The caller's tables are left as they were.
+  h.eq(options.onboarding_slug, "tutorial-game")
+  h.eq(options.onboardingSlug, nil)
+  h.eq(templates[1].min_conversion_count, 1)
+  h.eq(templates[1].variants[1].cta_text, "Play")
+end
+
+function T.share_passes_camel_case_and_malformed_jest_options_through()
+  local fake = h.fake_native()
+  local sdk = h.load_wrapper{ native = fake }
+  sdk.referrals_share({ reference = "r", onboardingSlug = "s",
+    notificationTemplates = { { minConversionCount = 0, variants = { { body = "b", ctaText = "c" } } } } }, function() end)
+  h.deep_eq(h.env.json.decode(fake:last("referrals_share").args[1]), { reference = "r", onboardingSlug = "s",
+    notificationTemplates = { { minConversionCount = 0, variants = { { body = "b", ctaText = "c" } } } } })
+  -- The SDK validates the values, so odd shapes still reach it.
+  sdk.referrals_share({ reference = "r", notification_templates = "nope", onboarding_slug = 5 }, function() end)
+  h.deep_eq(h.env.json.decode(fake:last("referrals_share").args[1]),
+    { reference = "r", notificationTemplates = "nope", onboardingSlug = 5 })
+  sdk.referrals_share({ reference = "r", notification_templates = { 7, { variants = "x" } } }, function() end)
+  h.deep_eq(h.env.json.decode(fake:last("referrals_share").args[1]),
+    { reference = "r", notificationTemplates = { 7, { variants = "x" } } })
+end
+
 function T.share_accepts_a_json_string()
   local fake = h.fake_native()
   local sdk = h.load_wrapper{ native = fake }

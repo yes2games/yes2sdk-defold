@@ -70,6 +70,15 @@ var Yes2SDKPlayerLib = {
         return 0;
     },
 
+    Yes2SDK_player_isBotAvatarSupported: function () {
+        try {
+            if (window.Yes2SDK && window.Yes2SDK.player && typeof window.Yes2SDK.player.isBotAvatarSupported === 'function') {
+                return window.Yes2SDK.player.isBotAvatarSupported() ? 1 : 0;
+            }
+        } catch (e) {}
+        return 0;
+    },
+
     // Each async call carries the request id minted in C++ and completes through
     // $Yes2SDKBridge (defined in lib_yes2sdk.js), so overlapping calls never share
     // a callback slot. Strings are read before the call returns: the pointers are
@@ -143,6 +152,18 @@ var Yes2SDKPlayerLib = {
         // url may be null when no photo is available: the default mapping passes JSON "null".
         Yes2SDKBridge.run(callback, requestId, 'player.getPhoto', function () {
             return [size || undefined];
+        });
+    },
+
+    // Resolves with the avatar URL as a plain string. Username and size checks
+    // stay in the SDK, so a bad value arrives as an INVALID_PARAM failure.
+    Yes2SDK_player_getBotAvatar: function (usernamePtr, sizePtr, requestId, callback) {
+        var username = UTF8ToString(usernamePtr);
+        var size = UTF8ToString(sizePtr);
+        Yes2SDKBridge.run(callback, requestId, 'player.getBotAvatarAsync', function () {
+            return [username, size || undefined];
+        }, function (url) {
+            return String(url == null ? "" : url);
         });
     },
 
