@@ -4,6 +4,14 @@ All notable changes to Yes2SDK for Defold will be documented in this file.
 
 Format follows [Keep a Changelog](https://keepachangelog.com/). Versioning follows [Semantic Versioning](https://semver.org/).
 
+## [1.9.0](https://github.com/yes2games/yes2sdk-defold/compare/v1.8.0...v1.9.0) (2026-10-08)
+
+
+### Features
+
+* add player_get_bot_avatar and player_is_bot_avatar_supported ([ba22333](https://github.com/yes2games/yes2sdk-defold/commit/ba22333ae4518c2268dbee75f81547b2d8199574))
+* **referrals:** accept onboarding_slug and notification_templates in referrals_share ([ba22333](https://github.com/yes2games/yes2sdk-defold/commit/ba22333ae4518c2268dbee75f81547b2d8199574))
+
 ## [1.8.0](https://github.com/yes2games/yes2sdk-defold/compare/v1.7.0...v1.8.0) (2026-10-06)
 
 
