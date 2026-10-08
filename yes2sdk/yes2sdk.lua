@@ -1751,9 +1751,56 @@ end
 
 -- ── Referrals ──
 
+-- Public snake_case option names to the camelCase names the SDK takes, at each
+-- level of the share options. Keys not listed here pass through unchanged, and
+-- `data` is never renamed.
+local _REFERRAL_KEYS = {
+  onboarding_slug = "onboardingSlug",
+  notification_templates = "notificationTemplates",
+}
+local _REFERRAL_TEMPLATE_KEYS = { min_conversion_count = "minConversionCount" }
+local _REFERRAL_VARIANT_KEYS = { cta_text = "ctaText", image_reference = "imageReference" }
+
+-- Copy `t` with its keys renamed through `names`. Non-table values come back as is.
+local function rename_keys(t, names)
+  if type(t) ~= "table" then return t end
+  local out = {}
+  for key, value in pairs(t) do
+    out[names[key] or key] = value
+  end
+  return out
+end
+
+-- Rename the snake_case keys of a share options table, templates and variants
+-- included, without touching the caller's tables. Values are left for the SDK
+-- to validate.
+local function map_referral_options(options)
+  local mapped = rename_keys(options, _REFERRAL_KEYS)
+  local templates = mapped.notificationTemplates
+  if type(templates) == "table" then
+    local out = {}
+    for i, template in pairs(templates) do
+      local t = rename_keys(template, _REFERRAL_TEMPLATE_KEYS)
+      if type(t) == "table" and type(t.variants) == "table" then
+        local variants = {}
+        for j, variant in pairs(t.variants) do
+          variants[j] = rename_keys(variant, _REFERRAL_VARIANT_KEYS)
+        end
+        t.variants = variants
+      end
+      out[i] = t
+    end
+    mapped.notificationTemplates = out
+  end
+  return mapped
+end
+
 -- Return the options as a JSON string with a non-empty string `reference`, or
 -- nil, err_json (INVALID_PARAM).
 local function referral_share_options(options, context)
+  if type(options) == "table" then
+    options = map_referral_options(options)
+  end
   local encoded, err = encode_options(options, context)
   if err then return nil, err end
   if encoded == nil then
@@ -1770,8 +1817,14 @@ local function referral_share_options(options, context)
 end
 
 --- Open the platform's invite flow with a referral link.
--- @param options Table (or JSON string): { reference = string (required, a stable campaign key),
---   data = table (delivered to the invited player), title, text, image (base64 data URL, at most 2 MB) }.
+-- @param options Table (or JSON string, passed through as is with the SDK's own
+--   camelCase names): { reference = string (required, a stable campaign key),
+--   data = table (delivered to the invited player), title, text, image (base64 data URL, at most 2 MB),
+--   onboarding_slug = string (game that invited players go through first),
+--   notification_templates = array of { min_conversion_count = integer >= 0,
+--   variants = array (at least one) of { title, body, cta_text, image_reference } } }.
+--   onboarding_slug and notification_templates are only used on platforms that
+--   support them; the SDK validates them and reports INVALID_PARAM.
 -- Callback signature: function(self, success, result_json) where result_json is '{"canceled":false}'
 -- (or true when the player closed the flow). Check referrals_is_supported() first.
 function M.referrals_share(options, callback)

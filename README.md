@@ -701,7 +701,25 @@ if yes2sdk.referrals_is_supported() then
 end
 ```
 
-`referrals_share` options: `reference` (required, a non-empty string), `data` (table), `title`, `text` and `image` (base64 data URL, PNG, JPEG or WebP, at most 2 MB). A missing or empty `reference` fails the callback with `INVALID_PARAM`. Both calls report failures through the usual error JSON (see [Errors](#errors)).
+`referrals_share` options: `reference` (required, a non-empty string), `data` (table), `title`, `text` and `image` (base64 data URL, PNG, JPEG or WebP, at most 2 MB). A missing or empty `reference` fails the callback with `INVALID_PARAM`.
+
+Two more options are used only on platforms that support them (Jest today):
+
+- `onboarding_slug`: the slug of a game that invited players go through first, for example a tutorial game.
+- `notification_templates`: notifications sent to the referrer as invited players join. Each template is `{ min_conversion_count = <whole number, 0 or more>, variants = { ... } }` with at least one variant `{ title, body, cta_text, image_reference }` (`body` and `cta_text` are required; `image_reference` is the id of a pre-approved image). The platform uses the template with the highest `min_conversion_count` the referrer has reached and picks one of its variants.
+
+```lua
+yes2sdk.referrals_share({
+    reference = "party_mode_v1",
+    onboarding_slug = "party-tutorial",
+    notification_templates = {
+        { min_conversion_count = 1, variants = { { body = "A friend joined your party!", cta_text = "Play" } } },
+        { min_conversion_count = 5, variants = { { title = "Party Mode unlocked", body = "Five friends joined.", cta_text = "Celebrate" } } },
+    },
+}, function(self, success, result) end)
+```
+
+The snake_case names above are mapped for you. In a JSON string use the camelCase names (`onboardingSlug`, `notificationTemplates`, `minConversionCount`, `ctaText`, `imageReference`). Malformed values fail with `INVALID_PARAM`. Both calls report failures through the usual error JSON (see [Errors](#errors)).
 
 ---
 
@@ -785,7 +803,7 @@ Supported on Jest:
 - [In-app purchases](#in-app-purchases) and [Subscriptions](#subscriptions)
 - [Notifications](#notifications) (`scheduled_in_days` 0 to 7, with images)
 - [Session](#session--gameplay-required) entry point data (`session_get_entry_point_data`)
-- [Referrals](#referrals) and [Context sharing (image)](#context-sharing-image)
+- [Referrals](#referrals) (with `onboarding_slug` and `notification_templates`) and [Context sharing (image)](#context-sharing-image)
 - [Analytics](#analytics-recommended) (logging only)
 
 Not supported: banners, leaderboard, stats, review, remote config, friends and score. Jest has no in-game ads: `ads_is_interstitial_supported()`, `ads_is_rewarded_supported()` and `ads_is_rewarded_ad_available()` return false, and `ads_show_interstitial` / `ads_show_rewarded` call `no_fill` and then `after_ad` (`before_ad`, `ad_viewed` and `ad_dismissed` never fire). Never rely on ads, and grant no reward from them.
