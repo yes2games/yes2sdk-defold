@@ -673,7 +673,7 @@ yes2sdk.notifications_cancel("daily_3", function(self, success, err) end)
 yes2sdk.notifications_cancel_all(function(self, success, err) end)
 ```
 
-- **Options:** `id`, `title` (required), `body`, `scheduled_in_days` (a whole number from 0 to 7) or `delay_seconds` (use one of them, not both), `cta_text`, `priority` (`low`, `medium`, `high` or `critical`), `image_asset_id` or `image_data_url` (use one of them), `icon_url`, `data`. A JSON string is accepted too and is passed through as is, so use the camelCase names in that case.
+- **Options:** `id`, `title` (required, a string; it may be empty, and platforms that allow it then send the notification without a title), `body`, `scheduled_in_days` (a whole number from 0 to 7) or `delay_seconds` (use one of them, not both), `cta_text`, `priority` (`low`, `medium`, `high` or `critical`), `image_asset_id` or `image_data_url` (use one of them), `icon_url`, `data`. A JSON string is accepted too and is passed through as is, so use the camelCase names in that case.
 - **Same id replaces.** Scheduling with an id that is already scheduled replaces the earlier notification. Without an id one is generated and returned.
 - **Result:** the callback gets `{"id","title","body","scheduledAt"}` with `scheduledAt` in milliseconds since the epoch. Invalid options fail with `INVALID_PARAM`.
 

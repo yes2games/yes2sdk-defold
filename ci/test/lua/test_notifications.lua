@@ -66,6 +66,12 @@ function T.callback_is_the_native_callback()
   h.deep_eq(got, { true, '{"id":"a"}' })
 end
 
+function T.empty_title_reaches_core()
+  local sdk, _, fake = load()
+  sdk.notifications_schedule({ title = "", body = "b", scheduled_in_days = 1 }, function() end)
+  h.deep_eq(sent_options(fake), { title = "", body = "b", scheduledInDays = 1 })
+end
+
 function T.nil_or_empty_options_still_reach_core_for_validation()
   local sdk, _, fake = load()
   sdk.notifications_schedule(nil, function() end)

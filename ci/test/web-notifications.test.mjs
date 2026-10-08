@@ -105,3 +105,15 @@ test("notifications: isSupported reflects the SDK", () => {
     assert.equal(no.exports.Yes2SDK_notifications_isSupported(), 0);
     assert.equal(loadWebLib(LIBS, {}).exports.Yes2SDK_notifications_isSupported(), 0);
 });
+
+test("notifications: an empty title reaches Core", async () => {
+    const seen = [];
+    const web = loadWebLib(LIBS, {
+        yes2sdk: { notifications: { scheduleAsync(o) { seen.push(o); return Promise.resolve({ id: "n" }); } } },
+    });
+    web.exports.Yes2SDK_notifications_schedule(JSON.stringify({ title: "", body: "b", scheduledInDays: 1 }), 4, CB);
+    await web.flush();
+    assert.deepEqual(seen, [{ title: "", body: "b", scheduledInDays: 1 }]);
+    assert.equal(web.dyncalls.length, 1);
+    assert.equal(web.dyncalls[0].args[1], 1);
+});

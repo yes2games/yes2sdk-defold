@@ -1666,7 +1666,8 @@ local _NOTIFICATION_KEYS = {
 
 --- Schedule a notification for later.
 -- @param options Table (or a JSON string, passed through as is with the SDK's
---   own camelCase names): { id, title (required), body, delay_seconds or
+--   own camelCase names): { id, title (required, a string; may be empty to
+--   send no title where the platform allows it), body, delay_seconds or
 --   scheduled_in_days (integer 0 to 7, not both), cta_text, priority
 --   ("low"|"medium"|"high"|"critical"), image_asset_id or image_data_url,
 --   icon_url, data }. The SDK validates the values and reports INVALID_PARAM.
@@ -1687,7 +1688,7 @@ function M.notifications_schedule(options, callback)
     return
   end
   -- A missing or empty options value still goes to the SDK so it can report
-  -- the missing title in one place.
+  -- the missing title in one place. An empty title string is valid.
   sdk.notifications_schedule(encoded or "{}", callback)
 end
 
