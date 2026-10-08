@@ -86,6 +86,9 @@ if not sdk then
   function sdk.ads_is_rewarded_supported() warn() return false end
   function sdk.auth_is_supported() warn() return false end
   function sdk.player_is_data_supported() warn() return false end
+  -- Bot avatars: unsupported, and the async call fails.
+  function sdk.player_is_bot_avatar_supported() warn() return false end
+  function sdk.player_get_bot_avatar(username, size, callback) stub_fail(callback, "player.getBotAvatarAsync") end
   function sdk.session_is_audio_enabled() warn() return true end
   function sdk.session_get_entry_point_data() warn() return "{}" end
   -- Registration prompt: no extension, no prompt.
@@ -334,6 +337,18 @@ if not sdk then
       if callback then
         next_frame(function(tself) callback(tself, true, '{"referrals":{},"signedRequest":"mock"}') end)
       end
+    end
+
+    -- Bot avatars: supported, and the URL names the bot. It is a placeholder,
+    -- not a loadable image, so the game's fallback art path gets exercised.
+    function sdk.player_is_bot_avatar_supported() return true end
+    function sdk.player_get_bot_avatar(username, size, callback)
+      local name = tostring(username):gsub("[^%w%-%._~]", function(c)
+        return string.format("%%%02X", string.byte(c))
+      end)
+      local url = "mock://bot-avatar/" .. tostring(size or "medium") .. "/" .. name
+      print("[Yes2SDK] Mock: player_get_bot_avatar succeeded (" .. url .. ")")
+      if callback then next_frame(function(tself) callback(tself, true, url) end) end
     end
 
     -- Notifications: schedule echoes the notification with a computed time.
@@ -1138,6 +1153,40 @@ end
 -- your server, never trust it client-side.
 function M.player_get_signed_info(payload, callback)
   sdk.player_get_signed_info(payload, callback)
+end
+
+local _BOT_AVATAR_CONTEXT = "player.getBotAvatarAsync"
+local _BOT_AVATAR_SIZES = { small = true, medium = true, large = true }
+
+--- Get a platform-generated avatar for a computer-controlled player (bot).
+-- The username seeds the picture, so the same bot always gets the same avatar.
+-- Gate it on player_is_bot_avatar_supported() and keep your own art as the
+-- fallback: unsupported platforms fail with FEATURE_NOT_SUPPORTED.
+-- @param username Bot name (non-empty string).
+-- @param size Optional "small", "medium" (default) or "large". May be omitted:
+--   player_get_bot_avatar(username, callback) works too.
+-- Callback signature: function(self, success, url) where url is the avatar URL
+-- string on success and the error JSON on failure. An empty username or an
+-- unknown size fails with INVALID_PARAM on the next frame.
+function M.player_get_bot_avatar(username, size, callback)
+  if callback == nil and type(size) == "function" then
+    size, callback = nil, size
+  end
+  if type(username) ~= "string" or username == "" then
+    fail_async(callback, invalid_param("username must be a non-empty string", _BOT_AVATAR_CONTEXT))
+    return
+  end
+  if size ~= nil and not _BOT_AVATAR_SIZES[size] then
+    fail_async(callback, invalid_param('size must be "small", "medium" or "large"', _BOT_AVATAR_CONTEXT))
+    return
+  end
+  sdk.player_get_bot_avatar(username, size or "medium", callback)
+end
+
+--- Whether the platform generates bot avatars (see player_get_bot_avatar).
+-- Returns a boolean; false before initialization.
+function M.player_is_bot_avatar_supported()
+  return sdk.player_is_bot_avatar_supported()
 end
 
 --- Whether player data storage (player_get_data / player_set_data) is available.

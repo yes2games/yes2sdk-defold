@@ -16,6 +16,8 @@ public:
     static int GetPhoto(lua_State* L);
     static int GetSignedInfo(lua_State* L);
     static int IsDataSupported(lua_State* L);
+    static int GetBotAvatar(lua_State* L);
+    static int IsBotAvatarSupported(lua_State* L);
 };
 extern "C" {
     const char* Yes2SDK_player_getName();
@@ -30,5 +32,7 @@ extern "C" {
     void Yes2SDK_player_getPhoto(const char* size, int requestId, Yes2SDKRequests::OnCompleteCallback callback);
     void Yes2SDK_player_getSignedInfo(const char* payload, int requestId, Yes2SDKRequests::OnCompleteCallback callback);
     int Yes2SDK_player_isDataSupported();
+    void Yes2SDK_player_getBotAvatar(const char* username, const char* size, int requestId, Yes2SDKRequests::OnCompleteCallback callback);
+    int Yes2SDK_player_isBotAvatarSupported();
 }
 #endif

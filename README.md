@@ -311,7 +311,7 @@ yes2sdk.analytics_log_event("boss_defeated", json.encode({ level = 3, time = 42.
 
 These modules add extra player-facing features. They are **not guaranteed** to be available at runtime — guard with a support check and handle the unsupported case gracefully. Don't make your core gameplay depend on them.
 
-Support checks available: `ads_is_interstitial_supported()`, `ads_is_rewarded_supported()`, `auth_is_supported()`, `player_is_data_supported()`, `friends_is_supported()`, `banners_is_supported()`, `score_is_supported()`, `leaderboard_is_supported()`, `stats_is_supported()`, `config_is_supported()`, `review_is_supported()`, `iap_is_supported()`, `iap_is_subscription_supported()`, `referrals_is_supported()`, `notifications_is_supported()`. (`context_is_supported()` exists too, but it can return false on platforms where sharing works, so do not use it as a gate: see [Context sharing](#context-sharing-image).)
+Support checks available: `ads_is_interstitial_supported()`, `ads_is_rewarded_supported()`, `auth_is_supported()`, `player_is_data_supported()`, `player_is_bot_avatar_supported()`, `friends_is_supported()`, `banners_is_supported()`, `score_is_supported()`, `leaderboard_is_supported()`, `stats_is_supported()`, `config_is_supported()`, `review_is_supported()`, `iap_is_supported()`, `iap_is_subscription_supported()`, `referrals_is_supported()`, `notifications_is_supported()`. (`context_is_supported()` exists too, but it can return false on platforms where sharing works, so do not use it as a gate: see [Context sharing](#context-sharing-image).)
 
 ```lua
 if yes2sdk.ads_is_rewarded_supported() then
@@ -414,6 +414,25 @@ end)
 
 yes2sdk.player_set_data(json.encode({level = 5}), function(self, success, error) end)
 ```
+
+### Bot avatars
+
+Games that fill a lobby or leaderboard with computer-controlled players can ask the platform for a matching avatar. The username seeds the picture, so the same bot always gets the same avatar. Only some platforms generate them: gate the call on `player_is_bot_avatar_supported()` and keep your own art as the fallback.
+
+```lua
+if yes2sdk.player_is_bot_avatar_supported() then
+    yes2sdk.player_get_bot_avatar("RoboRita", "small", function(self, success, url)
+        if success then
+            -- load url as the bot's picture
+        else
+            -- use your own bot art
+        end
+    end)
+end
+```
+
+- `size` is `"small"`, `"medium"` (the default) or `"large"`, and may be left out: `player_get_bot_avatar("RoboRita", callback)`.
+- On success the callback gets the image URL as a plain string. An empty username or an unknown size fails with `INVALID_PARAM`, and a platform without bot avatars fails with `FEATURE_NOT_SUPPORTED` (see [Errors](#errors)).
 
 ### Game Extras
 
@@ -761,7 +780,7 @@ Yes2SDK loads the platform SDK itself. Do not add Jest's own SDK script or engin
 
 Supported on Jest:
 
-- Player, and [Auth](#auth) with the [Registration prompt](#registration-prompt) (guests only)
+- Player, including [Bot avatars](#bot-avatars), and [Auth](#auth) with the [Registration prompt](#registration-prompt) (guests only)
 - [Data](#data-required) (1 MB) and [Lifecycle events](#lifecycle-events-required), including `on_exit_requested`
 - [In-app purchases](#in-app-purchases) and [Subscriptions](#subscriptions)
 - [Notifications](#notifications) (`scheduled_in_days` 0 to 7, with images)
@@ -838,6 +857,7 @@ The native extension is HTML5-only. In the Defold editor, `yes2sdk.*` calls run 
 - `initialize` / `start_game` succeed on the next frame
 - **Ads play a timed mock flow** (3s interstitial, 5s rewarded) and then fire the full callback sequence, so pause-resume wiring in `before_ad` / `after_ad` and the reward path in `ad_viewed` are exercised like a real ad
 - Referrals work too: `referrals_is_supported()` returns true, `referrals_share` succeeds and `referrals_list` returns an empty list
+- Bot avatars: `player_is_bot_avatar_supported()` returns true and `player_get_bot_avatar` succeeds on the next frame with a placeholder `mock://bot-avatar/<size>/<username>` URL. It is not a loadable image, so your fallback art path runs
 - `context_share` succeeds on the next frame and prints the share, and `context_is_supported()` returns true (real platforms may report false even where sharing works, so do not gate on it)
 - **IAP works end to end**: `iap_is_supported()` returns true, `iap_get_catalog` returns a sample catalog, `iap_purchase` accepts any product id and resolves with a realistic purchase payload, and `iap_get_purchases` / `iap_consume_purchase` operate on a session purchase list. Mock purchases carry `"isSandbox":true`. Subscriptions are mocked too: a sample `yes2.mock.premium.monthly` offer, subscribe / cancel / retention offer / status on session state
 - `auth_show_registration_prompt` returns a handle: `login()` prints a line, `close()` fires `on_close` on the next frame
